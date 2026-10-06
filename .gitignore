@@ -1,13 +1,5 @@
 .venv/
 
-# Das venv, in dem gebaut wird. Wird bei jedem Bauvorgang neu angelegt.
-.buildvenv/
-
-# Ergebnis und Zwischenstufe des Bauvorgangs. Beides ist Maschine und
-# gehoert nicht ins Repository; das fertige Programm gibt es als Release.
-dist/
-build/
-
 __pycache__/
 *.py[cod]
 .pytest_cache/
