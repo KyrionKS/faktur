@@ -17,12 +17,7 @@ from textual.message import Message
 from textual.widgets import Input, Label, Static
 
 from faktur import zeichen
-
-#: Die Akzentfarbe, aus dem Logo ausgelesen.
-AKZENT = "#512E80"
-
-#: Ein hellerer Ton derselben Farbe, für Spaltenköpfe und Nummern.
-AKZENT_HELL = "#9C7FC7"
+from faktur.farben import AKZENT, SEKUNDAER
 
 #: Der Pfeil vor dem gewählten Punkt.
 PFEIL = "▶"
@@ -102,7 +97,7 @@ class Auswahl(Static):
             else:
                 zeile.append(PFEIL_RAUM)
 
-            zeile.append(f"{taste:>2}. ", style=f"bold {AKZENT_HELL}")
+            zeile.append(f"{taste:>2}. ", style=f"bold {SEKUNDAER}")
             zeile.append(f"{titel:<24} ", style=f"bold {AKZENT}" if gewaehlt else "")
             zeile.append(f" {erklaerung}", style="" if gewaehlt else "dim")
             zeile.append("\n")
@@ -271,7 +266,7 @@ class Tabelle(Static):
         """
         kopf = Text(PFEIL_RAUM)
         for titel, breite in self.spalten:
-            kopf.append(titel.ljust(breite) + " ", style=f"bold {AKZENT_HELL}")
+            kopf.append(titel.ljust(breite) + " ", style=f"bold {SEKUNDAER}")
         kopf.append("\n")
 
         text = Text()
@@ -453,10 +448,10 @@ class Meldung(Static):
     Meldung {
         height: 1;
         padding: 0 2;
-        color: $text-muted;
+        color: #A8C0A0;
     }
     Meldung.gefehler {
-        color: $error;
+        color: #E88A8A;
         text-style: bold;
     }
     """
