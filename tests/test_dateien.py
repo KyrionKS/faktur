@@ -151,23 +151,83 @@ def test_doppelte_nummer_wird_abgewiesen(verbindung: sqlite3.Connection) -> None
         )
 
 
-def test_gleiche_nummer_fuer_angebot_und_rechnung(
+def test_gleiche_nummer_fuer_angebot_und_rechnung_geht_nicht(
     verbindung: sqlite3.Connection,
 ) -> None:
-    """Angebote und Rechnungen werden getrennt gezählt.
+    """Ein Zähler für beide Arten, also auch eine Nummer für beide.
+
+    Angebot und Rechnung eines Vorgangs sollen nebeneinander stehen, etwa
+    0001 und 0002. Trügen beide dieselbe Nummer, wäre am Papier nicht mehr zu
+    sehen, dass sie zusammengehören.
 
     Args:
         verbindung: Die Testdatenbank.
     """
     dateien.dokument_speichern(
-        verbindung, {"art": "angebot", "nummer": "2026-001", "datum": "06.10.2026"}, []
-    )
-    dateien.dokument_speichern(
-        verbindung, {"art": "rechnung", "nummer": "2026-001", "datum": "06.10.2026"}, []
+        verbindung, {"art": "angebot", "nummer": "0001", "datum": "06.10.2026"}, []
     )
 
-    assert "2026-001" in dateien.nummern(verbindung, "angebot")
-    assert "2026-001" in dateien.nummern(verbindung, "rechnung")
+    with pytest.raises(sqlite3.IntegrityError):
+        dateien.dokument_speichern(
+            verbindung,
+            {"art": "rechnung", "nummer": "0001", "datum": "06.10.2026"},
+            [],
+        )
+
+
+def test_zaehler_zaehlt_ueber_beide_arten(verbindung: sqlite3.Connection) -> None:
+    """Der Zähler läuft durch, er beginnt nicht je Art neu.
+
+    Args:
+        verbindung: Die Testdatenbank.
+    """
+    assert dateien.naechste_nummer(verbindung) == "0001"
+
+    dateien.dokument_speichern(
+        verbindung, {"art": "angebot", "nummer": "0001", "datum": "06.10.2026"}, []
+    )
+    assert dateien.naechste_nummer(verbindung) == "0002"
+
+    dateien.dokument_speichern(
+        verbindung, {"art": "rechnung", "nummer": "0002", "datum": "07.10.2026"}, []
+    )
+    assert dateien.naechste_nummer(verbindung) == "0003"
+
+
+def test_zaehler_springt_ueber_freie_nummern(verbindung: sqlite3.Connection) -> None:
+    """Der Vorschlag ist die höchste vergebene plus eins.
+
+    Args:
+        verbindung: Die Testdatenbank.
+    """
+    for nummer in ("0001", "0007"):
+        dateien.dokument_speichern(
+            verbindung,
+            {"art": "rechnung", "nummer": nummer, "datum": "06.10.2026"},
+            [],
+        )
+
+    assert dateien.naechste_nummer(verbindung) == "0008"
+
+
+def test_zaehler_ignoriert_alte_nummern_mit_jahr(
+    verbindung: sqlite3.Connection,
+) -> None:
+    """Eine Zahl wie 2026-199 zählt nicht mit.
+
+    Solche Nummern gab es vorher. Sie enthalten keine Zahl, die man als
+    Zählerstand lesen könnte, also dürfen sie den Vorschlag nicht verschieben.
+
+    Args:
+        verbindung: Die Testdatenbank.
+    """
+    dateien.dokument_speichern(
+        verbindung,
+        {"art": "rechnung", "nummer": "2026-199", "datum": "06.10.2026"},
+        [],
+    )
+
+    assert dateien.naechste_nummer(verbindung) == "0001"
 
 
 def test_dokument_aendern_ersetzt_die_positionen(

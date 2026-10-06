@@ -275,22 +275,18 @@ class EditorScreen(BasisScreen):
             feld: Der Name des Feldes.
 
         Returns:
-            Der Vorschlag als Text.
+            Der Vorschlag als Text. Datum und Termin sind rechenbar, die
+            Notiz bekommt keinen.
         """
-        nummern = dateien.nummern(self.db, self.art)
-        jahr = betraege.jahr()
-
         if feld == "datum":
             return betraege.heute()
-        if feld in ("faellig",):
+        if feld == "faellig":
             return betraege.plus_tage(14)
         if feld == "gueltig_bis":
             return betraege.plus_tage(21)
-        if feld == "nummer" and nummern:
-            letzte = max((int(n[:4]) for n in nummern if n[:4].isdigit()), default=0)
-            folgen = [n for n in nummern if n[:4] == str(letzte)]
-            return f"{jahr}-{len(folgen) + 1:03d}"
-        return f"{jahr}-001"
+        if feld == "nummer":
+            return dateien.naechste_nummer(self.db)
+        return ""
 
 
 class PositionenScreen(BasisScreen):
@@ -713,10 +709,8 @@ class KontrolleScreen(BasisScreen):
             return
 
         nummer = str(angaben["nummer"]).strip()
-        if nummer in dateien.nummern(self.db, self.art):
-            self.meldung(
-                f"Die Nummer {nummer} ist für diese Art schon vergeben.", gut=False
-            )
+        if nummer in dateien.nummern(self.db):
+            self.meldung(f"Die Nummer {nummer} ist schon vergeben.", gut=False)
             return
 
         art = self.art

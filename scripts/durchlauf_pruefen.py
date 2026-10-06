@@ -183,7 +183,7 @@ def main() -> int:
     dokument_bauen(
         verbindung,
         "angebot",
-        "2026-001",
+        dateien.naechste_nummer(verbindung),
         kunde_id,
         {"gueltig_bis": betraege.plus_tage(21)},
         ANGEBOT_POSITIONEN,
@@ -191,7 +191,7 @@ def main() -> int:
     dokument_bauen(
         verbindung,
         "rechnung",
-        "2026-001",
+        dateien.naechste_nummer(verbindung),
         kunde_id,
         {"faellig": betraege.plus_tage(14)},
         RECHNUNG_POSITIONEN,
