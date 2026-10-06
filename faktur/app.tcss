@@ -1,0 +1,117 @@
+/* Das Aussehen der ganzen App.
+ *
+ * Farbton ist die Akzentfarbe aus dem Logo. Alles andere ist ruhig: eine
+ * Zeile Abstand, keine Kästen, kein Schatten. */
+
+Screen {
+    background: $surface;
+    color: $text;
+    padding: 1 0 0 0;
+}
+
+.logo {
+    height: auto;
+    padding: 0 2;
+    color: #512E80;
+}
+
+#inhalt {
+    height: 1fr;
+    padding: 1 2;
+}
+
+#hinweis {
+    width: 1fr;
+    padding: 0 0 1 0;
+    color: $text-muted;
+    text-style: italic;
+}
+
+/* Die Liste im Hauptmenü */
+
+.auswahl {
+    height: auto;
+    width: 1fr;
+    padding: 0 1;
+}
+
+.tabelle {
+    height: auto;
+    width: 1fr;
+    padding: 0 1;
+}
+
+/* Beschriftungen neben Eingabefeldern */
+
+.bezeichnung {
+    width: 22;
+    height: 3;
+    content-align: left middle;
+    color: $text-muted;
+}
+
+.zeile {
+    height: 3;
+    width: 1fr;
+}
+
+Input {
+    width: 1fr;
+    height: 3;
+    border: tall $panel;
+    padding: 0 1;
+}
+
+/* Das Fenster mit einer Ja-Nein-Frage */
+
+#fenster {
+    width: 60;
+    height: auto;
+    padding: 1 2;
+    background: $panel;
+    border: round $accent;
+}
+
+#fenster_titel {
+    text-style: bold;
+    color: $accent;
+    padding-bottom: 1;
+}
+
+#fenster_text {
+    padding-bottom: 1;
+}
+
+#fenster_knopf {
+    height: 1;
+}
+
+#knopf_ja {
+    width: 22;
+    color: $text;
+}
+
+#knopf_nein {
+    width: 22;
+    color: $text-muted;
+}
+
+/* Die Zusammenfassung vor dem Speichern */
+
+.summe {
+    padding: 0 0 1 0;
+}
+
+.summe_label {
+    color: $text-muted;
+}
+
+.summe_wert {
+    color: $accent;
+    text-style: bold;
+}
+
+Footer {
+    background: $panel;
+    color: $text-muted;
+}

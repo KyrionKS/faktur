@@ -1,0 +1,17 @@
+charset-normalizer==3.5.2
+iniconfig==2.3.0
+linkify-it-py==2.2.0
+markdown-it-py==4.2.0
+mdit-py-plugins==0.6.1
+mdurl==0.1.2
+packaging==26.3
+pillow==12.3.0
+platformdirs==4.12.3
+pluggy==1.6.0
+Pygments==2.21.0
+pytest==9.1.1
+reportlab==5.0.1
+rich==15.0.0
+ruff==0.16.10
+textual==8.2.8
+typing_extensions==4.16.0
