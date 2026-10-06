@@ -14,7 +14,7 @@ brew install python@3.12
 Dann das Programm holen und bauen:
 
 ```bash
-git clone https://github.com/KyrionKS/faktur.git
+git clone git@github.com:KyrionKS/faktur.git
 cd faktur
 .venv/bin/python scripts/app_bauen.py
 ```
@@ -49,6 +49,10 @@ Legst du `Faktur.app` nach `~/Programme`, liegt alles unter
 Unter <https://github.com/KyrionKS/faktur/releases> liegt zu jeder Version
 ein `Faktur.app.zip`. Herunterladen, auspacken, `Faktur.app` doppelklicken.
 
+Für Version 0.3 direkt:
+
+<https://github.com/KyrionKS/faktur/releases/download/v0.3/Faktur.app.zip>
+
 Ein aus dem Netz geladenes Programm trägt ein Attribut, das macOS blockiert.
 Falls die Meldung *„Kann nicht geöffnet werden, weil der Entwickler nicht
 verifiziert werden konnte"* kommt, im Terminal:
@@ -58,6 +62,9 @@ xattr -cr ~/Downloads/Faktur.app
 ```
 
 Ein selbst gebautes Programm hat dieses Problem nicht.
+
+Die Datei heißt `Faktur.app.zip` und ist rund 20 Megabyte groß. Nach dem
+Auspacken bleibt sie liegen; das Programm selbst ist die Datei `Faktur.app`.
 
 ## Das Logo
 
@@ -101,5 +108,6 @@ Ausweichweg gehen die Ziffern und der Anfangsbuchstabe.
 schrumpft, das Menü nicht.
 
 ## Aktuelle Version
+
 
 0.3.0
