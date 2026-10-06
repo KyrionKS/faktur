@@ -41,8 +41,7 @@ python3 -m venv .venv
 ```
 
 Das dauert eine Minute. Danach stehen Textual, Pillow und Reportlab im
-venv. Alle drei haben fertigeProgramme für den Mac, es wird nichts
-übersetzt.
+venv. Alle drei gibt es fertig für den Mac, es wird nichts übersetzt.
 
 ## 3. Starten
 
@@ -59,7 +58,8 @@ geht das über *Fenster → Größe* oder mit ⌘ und Maus ziehen.
 
 ## Wenn es nicht startet
 
-**Der Grundlos geht nichts: Fenster öffnet und ist sofort wieder weg.**
+**Der Grund für „geht nichts": Das Fenster öffnet sich und ist sofort wieder
+weg.**
 
 Ein Menü im Terminal stirbt ohne jede Meldung, wenn etwas schiefgeht. Deshalb
 zwei Dinge:
@@ -80,7 +80,7 @@ Terminal sie in eine Datei. Oder per Umleitung:
 **`externally-managed-environment`** — die neuere Python-Version von macOS
 lässt sich nicht global verändern. Das ist genau der Grund für Schritt 2: mit
 `.venv` wird in eine eigene Umgebung installiert und die Systeminstallation
-blegt unangetastet. Wer den Fehler sieht, hat Schritt 2 übersprungen.
+bleibt unangetastet. Wer den Fehler sieht, hat Schritt 2 übersprungen.
 
 **`No matching distribution found`** bei einer der drei Abhängigkeiten —
 dann stimmt die Python-Version nicht. Zurück zu Schritt 1.
@@ -120,13 +120,27 @@ selbst an die richtige Stelle.
 ## Wenn gar nichts hilft
 
 Diese drei Befehle zeigen, wo es hakt. Ihre Ausgabe sagt mehr als jede
- Vermutung:
+Vermutung:
 
 ```bash
 .venv/bin/python -c "import sys; print(sys.version)"
 .venv/bin/python -c "import textual, reportlab, PIL; print('Abhängigkeiten da')"
+.venv/bin/python -c "import faktur.app; print('Programm lädt sich')"
+```
+
+Der letzte Befehl ist der aussagekräftigste: Er zieht das ganze Programm
+herein, und wenn etwas fehlt oder kaputt ist, steht hier die Fehlermeldung
+und nicht irgendwo in einem weggeworfenen Fenster.
+
+Die eigenen Tests laufen mit
+
+```bash
+.venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python -m pytest -q
 ```
+
+und sagen, ob das Programm an sich in Ordnung ist — unabhängig davon, was auf
+deinem Rechner los ist.
 
 ## Daten mitnehmen
 
