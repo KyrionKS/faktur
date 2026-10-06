@@ -334,3 +334,96 @@ def test_leistung_loeschen_behaelt_alte_dokumente(
     assert positionen[0]["bezeichnung"] == "Ton"
     assert positionen[0]["preis"] == 850.0
     assert positionen[0]["leistung_id"] is None
+
+
+def test_angebot_wird_zur_rechnung_mit_alle_positionen(
+    verbindung: sqlite3.Connection,
+) -> None:
+    """Beim Umwandeln darf keine Position verloren gehen.
+
+    Args:
+        verbindung: Die Testdatenbank.
+    """
+    kunde_id = dateien.kunde_speichern(verbindung, {"firma": "Film AG"})
+    leistungen = dateien.leistungen(verbindung)
+    ton = leistungen[0]
+    mischung = leistungen[1]
+
+    angebot_id = dateien.dokument_speichern(
+        verbindung,
+        {
+            "art": "angebot",
+            "nummer": "0001",
+            "kunde_id": kunde_id,
+            "datum": "01.10.2026",
+            "gueltig_bis": "22.10.2026",
+            "notiz": "Angebot gilt drei Wochen.",
+        },
+        [
+            {
+                "leistung_id": ton["id"],
+                "bezeichnung": ton["bezeichnung"],
+                "menge": "2",
+                "einheit": "Tag",
+                "preis": "850",
+            },
+            {
+                "leistung_id": mischung["id"],
+                "bezeichnung": mischung["bezeichnung"],
+                "menge": "10",
+                "einheit": "Stunde",
+                "preis": "95",
+            },
+        ],
+    )
+
+    kopf, positionen = dateien.als_angebot_uebernehmen(verbindung, angebot_id)
+
+    rechnung_id = dateien.dokument_speichern(verbindung, kopf, positionen)
+    rechnung = dateien.dokument_holen(verbindung, rechnung_id)
+
+    assert rechnung is not None
+    assert rechnung["art"] == "rechnung"
+    assert rechnung["kunde_id"] == kunde_id
+    assert rechnung["notiz"] == "Angebot gilt drei Wochen."
+    # Datum und Fälligkeit bleiben leer, die kommen in der Kontrolle dazu.
+    assert rechnung["datum"] == ""
+    assert rechnung["faellig"] == ""
+
+    uebernommen = dateien.positionen(verbindung, rechnung_id)
+    assert len(uebernommen) == 2
+    assert [p["bezeichnung"] for p in uebernommen] == [
+        ton["bezeichnung"],
+        mischung["bezeichnung"],
+    ]
+    assert dateien.summe_von(verbindung, rechnung_id) == 2650.0
+    # Die Verknüpfung zur Preisliste bleibt, damit später zugeordnet
+    # werden kann, welcher Preis zu welcher Leistung gehört.
+    assert uebernommen[0]["leistung_id"] == ton["id"]
+
+
+def test_angebot_bleibt_beim_umwandeln_bestehen(
+    verbindung: sqlite3.Connection,
+) -> None:
+    """Das Angebot wird nicht verbraucht, es bleibt als Beleg stehen.
+
+    Args:
+        verbindung: Die Testdatenbank.
+    """
+    kunde_id = dateien.kunde_speichern(verbindung, {"firma": "Werbe GmbH"})
+    angebot_id = dateien.dokument_speichern(
+        verbindung,
+        {
+            "art": "angebot",
+            "nummer": "0001",
+            "kunde_id": kunde_id,
+            "datum": "01.10.2026",
+        },
+        [{"bezeichnung": "Jingle", "menge": "1", "preis": "450"}],
+    )
+
+    kopf, positionen = dateien.als_angebot_uebernehmen(verbindung, angebot_id)
+    dateien.dokument_speichern(verbindung, kopf, positionen)
+
+    assert dateien.dokument_holen(verbindung, angebot_id) is not None
+    assert len(dateien.positionen(verbindung, angebot_id)) == 1

@@ -21,14 +21,14 @@ KOPFFELDER_ANGEBOT = [
     ("nummer", "Nummer", ""),
     ("datum", "Datum", ""),
     ("gueltig_bis", "Gültig bis", ""),
-    ("notiz", "Notiz für das Dokument", ""),
+    ("notiz", "Notiz", "Nur auf diesem Dokument"),
 ]
 
 KOPFFELDER_RECHNUNG = [
     ("nummer", "Nummer", ""),
     ("datum", "Datum", ""),
     ("faellig", "Fällig am", ""),
-    ("notiz", "Notiz für das Dokument", ""),
+    ("notiz", "Notiz", "Nur auf diesem Dokument"),
 ]
 
 
@@ -71,7 +71,8 @@ class DokumentenScreen(BasisScreen):
 
     BINDINGS = [
         Binding("a", "angebot", "Neues Angebot", show=True),
-        Binding("r", "rechnung", "Neue Rechnung", show=True),
+        Binding("r", "rechnung", "Abrechnen", show=True),
+        Binding("enter", "pdf", "PDF neu schreiben", show=True),
     ]
 
     def __init__(
@@ -153,21 +154,40 @@ class DokumentenScreen(BasisScreen):
         self.app.push_screen(EditorScreen(self.db, "angebot"))
 
     def action_rechnung(self) -> None:
-        """Beginnt eine neue Rechnung."""
+        """Rechnet ab, oder macht aus dem Angebot eine Rechnung.
+
+        Steht die Auswahl auf einem Angebot, wird daraus eine Rechnung. Sonst
+        fängt eine neue Rechnung an. So heisst ``r`` immer das Gleiche:
+        abrechnen.
+        """
+        tabelle = self.query(Tabelle)
+        if (
+            tabelle
+            and tabelle.first()
+            and tabelle.first().index < len(self.dokumente)
+            and self.dokumente[tabelle.first().index]["art"] == "angebot"
+        ):
+            self.angebot_zu_rechnung()
+            return
         self.app.push_screen(EditorScreen(self.db, "rechnung"))
 
-    def on_tabelle_gewaehlt(self, event: Tabelle.Gewaehlt) -> None:
-        """Schreibt die PDF des gewählten Dokuments neu.
+    def action_pdf(self) -> None:
+        """Schreibt die PDF des markierten Dokuments neu."""
+        self.markiertes_dokument_schreiben()
 
-        Args:
-            event: Die Nachricht der Tabelle.
+    def markiertes_dokument_schreiben(self) -> None:
+        """Nimmt das markierte Dokument und schreibt die PDF.
+
+        Geht ohne Auswahl nicht, weil es dann nichts zu schreiben gäbe.
         """
-        if event.zeile >= len(self.dokumente):
+        tabelle = self.query_one(Tabelle)
+        if tabelle.index >= len(self.dokumente):
             return
 
-        dokument = self.dokumente[event.zeile]
+        dokument = self.dokumente[tabelle.index]
         voll = dateien.dokument_holen(self.db, dokument["id"])
         if voll is None:
+            self.meldung("Das Dokument gibt es nicht mehr.", gut=False)
             return
 
         ziel = db.ausgabeordner() / f"{dateiname(voll, voll['art'])}.pdf"
@@ -178,6 +198,43 @@ class DokumentenScreen(BasisScreen):
             return
 
         self.meldung(f"Geschrieben: {ziel}")
+
+    def angebot_zu_rechnung(self) -> None:
+        """Macht aus dem markierten Angebot eine Rechnung.
+
+        Kunde und Positionen wandern mit, samt der Verknüpfung zur
+        Preisliste. Offen bleiben nur Nummer, Datum und Fälligkeit, die
+        stehen in der Kontrolle.
+        """
+        tabelle = self.query_one(Tabelle)
+        if tabelle.index >= len(self.dokumente):
+            return
+
+        dokument = self.dokumente[tabelle.index]
+        if dokument["art"] != "angebot":
+            self.meldung(
+                "Nur aus einem Angebot wird eine Rechnung. "
+                "Markiert ist eine Rechnung.",
+                gut=False,
+            )
+            return
+
+        try:
+            kopf, positionen = dateien.als_angebot_uebernehmen(self.db, dokument["id"])
+        except ValueError:
+            self.meldung("Das Angebot liess sich nicht lesen.", gut=False)
+            return
+
+        editor = EditorScreen(self.db, "rechnung", kopf, positionen, direkt=True)
+        self.app.push_screen(editor)
+
+    def on_tabelle_gewaehlt(self, event: Tabelle.Gewaehlt) -> None:
+        """Schreibt die PDF des gewählten Dokuments neu.
+
+        Args:
+            event: Die Nachricht der Tabelle.
+        """
+        self.markiertes_dokument_schreiben()
 
     def on_tabelle_loeschen(self, event: Tabelle.Loeschen) -> None:
         """Fragt nach und löscht dann.
@@ -216,6 +273,7 @@ class EditorScreen(BasisScreen):
         art: str,
         angaben: dict[str, str | int | None] | None = None,
         positionen: list[dict[str, str | float | int | None]] | None = None,
+        direkt: bool = False,
     ) -> None:
         """Legt den Editor an.
 
@@ -224,11 +282,14 @@ class EditorScreen(BasisScreen):
             art: ``angebot`` oder ``rechnung``.
             angaben: Werte für den Kopf, etwa aus einem Angebot übernommen.
             positionen: Positionen, etwa aus einem Angebot übernommen.
+            direkt: Wenn wahr, wird die Kundenauswahl übersprungen. Beim
+                Umwandeln eines Angebots ist der Kunde längst bekannt.
         """
         super().__init__(verbindung)
         self.art = art
         self.angaben: dict[str, str | int | None] = angaben or {}
         self.positionen: list[dict[str, str | float | int | None]] = positionen or []
+        self.direkt = direkt
         self._titel = "Angebot" if art == "angebot" else "Rechnung"
 
     def inhalt(self) -> ComposeResult:
@@ -258,6 +319,20 @@ class EditorScreen(BasisScreen):
             for nummer, kunde in enumerate(kunden, start=1)
         )
         yield Auswahl(punkte, self.kunde_gewaehlt)
+
+    def start_fokus(self) -> None:
+        """Springt direkt zur Kontrolle, wenn Kunde und Positionen da sind.
+
+        Beim Umwandeln eines Angebots gibt es nichts zu wählen: Der Kunde
+        steht fest, die Positionen sind übernommen. Es fehlen nur Nummer,
+        Datum und Fälligkeit.
+        """
+        if self.direkt and self.angaben.get("kunde_id"):
+            self.app.push_screen(KontrolleScreen(self.db, self.art, self))
+            return
+        auswahl = self.query(Auswahl)
+        if auswahl:
+            auswahl.first().focus()
 
     def kunde_gewaehlt(self, kunde_id: str) -> None:
         """Weiter zu den Positionen.

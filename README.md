@@ -56,6 +56,18 @@ Weiterhin möglich, wenn es schneller geht:
 | `esc` | einen Schritt zurück |
 | `Strg+Q` | beenden |
 
+## Angebot in Rechnung
+
+Steht die Auswahl in der Dokumentenliste auf einem **Angebot**, macht `r`
+daraus eine Rechnung. Kunde, alle Positionen, Texte und Preise wandern mit,
+samt der Verknüpfung zur Preisliste. Das Angebot bleibt als Beleg stehen.
+
+Offen bleiben nur Nummer, Datum und Fälligkeit — die stehen schon in der
+Kontrolle, weil sie sich von Rechnung zu Rechnung unterscheiden.
+
+Steht die Auswahl auf keinem Angebot, fängt `r` wie bisher eine neue Rechnung
+an. Die Taste meint immer dasselbe: abrechnen.
+
 ## So arbeitest du damit
 
 **Die Felder sind vorbelegt.** Wo sich etwas ausrechnen lässt, steht der
@@ -69,13 +81,38 @@ dort eine Leistung, dann justierst du Menge und Preis.
 Gesamtbetrag, der Brieftext. Erst dann entsteht das Dokument und die PDF,
 und der Pfad wird dir genannt.
 
-**Angebot zu Rechnung.** Punkt 2 nimmt die Positionen eines Angebots
-unverändert mit. Du gibst nur Datum und Fälligkeit an.
+**Angebot zu Rechnung.** Siehe oben, ein Tastendruck in der Dokumentenliste.
+
+## Nummern
+
+Vier Stellen, führende Nullen: `0001`, `0002`, `0003`. **Angebot und
+Rechnung kommen aus einem Zähler**, damit nebeneinandersteht, dass sie zum
+selben Vorgang gehören. Angebot `0001` und Rechnung `0002` sind Paar und
+Vorgang.
+
+Die Nummer wird vorgeschlagen, aber sie gehört dir und deinem Steuerberater.
+Die Datenbank lässt keine doppelte Nummer zu, auch nicht über die Art
+hinweg.
+
+Beim ersten Start nach dem Umstieg werden die alten Nummern auf vier Stellen
+geschrieben, nach Datum sortiert. Vorher landet eine Kopie neben der
+Datenbank: `~/.faktur/faktur.db.bak`.
 
 ## Textbausteine
 
 Unter `6` → `3` und `4`: je ein Text für Angebote und für Rechnungen.
+
+Das ist ein eigener Editor mit Zeilennummern, kein einzeiliges Feld — der
+Text hat Absätze, und die müssen beim Speichern unbeschädigt bleiben.
 Leerzeilen trennen Absätze.
+
+| Taste | Wirkung |
+|---|---|
+| `Strg+S` | speichern |
+| `Strg+R` | den mitgelieferten Vorschlag zurückholen |
+| `esc` | abbrechen |
+
+Unter dem Feld stehen die Namen, die du verwenden kannst.
 
 Doppelte Klammern ersetzt das Programm:
 
@@ -96,17 +133,26 @@ Doppelte Klammern ersetzt das Programm:
 
 **Tippfehler bleiben sichtbar.** `{{Kuude}}` steht als `{{Kuude}}` auf der
 PDF, statt still zu verschwinden. Beim Speichern sagt das Programm, welche
-Namen es nicht kennt. Unter `6` → `5` steht die ganze Liste.
+Namen es nicht kennt.
 
 `{{Kunde_Anrede}}` schneidet den Vornamen ab: aus „Herr Max Mustermann"
 wird „Herr Mustermann". Damit kannst du frei formulieren statt in
 Höflichkeitsformeln zu verfallen.
 
-## Nummern
+## Die Farben
 
-Die Nummer wird vorgeschlagen, aber sie gehört dir und deinem Steuerberater.
-Vergibt sind gleiche Nummern für die gleiche Art: ein Angebot und eine
-Rechnung dürfen beide `2026-001` heißen, zwei Rechnungen nicht.
+Es sind zwei Farben mit demselben Farbton, aber für zwei Untergründe:
+
+| | Wert | Kontrast |
+|---|---|---|
+| PDF, auf Papier | `#512E80` | 10.23:1 |
+| Terminal, Hauptakzent | `#C9B5E3` | 7.28:1 |
+| Terminal, Nebenton | `#A88CD4` | 4.79:1 |
+
+Das Violett aus dem Logo ist auf Papier hervorragend und im Terminal
+unbrauchbar — dort hat es nur 1.33:1, man sieht es kaum noch. Darum sind es
+zwei Werte. Alle stehen in `faktur/farben.py` mit der gemessenen Zahl, und
+`tests/test_farben.py` rechnet nach, damit niemand sie wieder dunkler macht.
 
 ## Wie die PDF aussieht
 
@@ -128,8 +174,10 @@ inklusive Steuer als Endpreis ein.
 | `faktur/app.py` | die App und das Hauptmenü |
 | `faktur/basis.py` | der Rahmen aller Bildschirme |
 | `faktur/widgets.py` | Logo, Auswahlliste, Formular, Tabelle |
+| `faktur/editor.py` | der mehrzeilige Editor für die Brieftexte |
 | `faktur/zeichen.py` | das Logo als Text |
-| `faktur/db.py` | Schema und Verbindung |
+| `faktur/farben.py` | die Farben mit ihrem Kontrast |
+| `faktur/db.py` | Schema, Verbindung und der Umstieg |
 | `faktur/dateien.py` | Kunden, Leistungen, Dokumente |
 | `faktur/einstellungen.py` | Stammdaten, Logo, Textbausteine |
 | `faktur/betraege.py` | Geldbeträge und Datumsangaben |
@@ -156,16 +204,22 @@ Bild ruhig und nichts läuft über, wenn ein Untermenü zurückkommt.
 .venv/bin/python scripts/durchlauf_pruefen.py   # Daten und PDF ohne Menü
 .venv/bin/python scripts/ablauf_pruefen.py      # ganz durch die Oberfläche
 .venv/bin/python scripts/bild_pruefen.py        # Menü in verschiedenen Grössen
+.venv/bin/python scripts/bilder_speichern.py    # Bildschirme als PNG
 ```
 
 `ablauf_pruefen.py` tippt sich durch die App wie ein Mensch und prüft nach
-jedem Schritt, ob der richtige Bildschirm da steht. Das prüft genau das, woran
-die erste Fassung gescheitert ist.
+jedem Schritt, ob der richtige Bildschirm da steht — inklusive der Umwandlung
+von Angebot in Rechnung. Das prüft genau das, woran die erste Fassung
+gescheitert ist.
+
+`bilder_speichern.py` legt PNG von jedem Bildschirm in `beispiele/` ab. Damit
+sieht man den Kontrast, statt ihn zu rechnen.
 
 ## Was fehlt bewusst
 
 Keine Verträge, keine Projektverwaltung, kein Storno, keine Rabatte, kein
-Mahnwesen. Preise sind Endpreise.
+Mahnwesen. Preise sind Endpreise. Das Angebot wird beim Umwandeln kopiert,
+nicht verschoben — der Beleg bleibt stehen.
 
 ## Auf macOS und Windows
 

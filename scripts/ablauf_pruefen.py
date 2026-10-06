@@ -45,6 +45,13 @@ async def durchlauf() -> int:
     nonlocal_fehler = [0]
     app = FakturApp(ordner / "ablauf.db")
 
+    # Die App legt ihre PDF in den echten Rechnungsordner im Heimverzeichnis.
+    # Beim Prüfen gehört das in einen Ordner, der danach weg kann, sonst
+    # landen Testdokumente zwischen den echten Rechnungen.
+    from faktur import db as db_modul
+
+    db_modul.RECHNUNGEN = ordner / "Rechnungen"
+
     async with app.run_test(size=(100, 34)) as pilot:
 
         async def tippen(*tasten: str) -> None:
@@ -153,6 +160,26 @@ async def durchlauf() -> int:
         pruefe("Dokumentenliste", "Angebot")
         await tippen("enter")
         pruefe("PDF geschrieben", "Geschrieben")
+
+        geschrieben = list((ordner / "Rechnungen").glob("*.pdf"))
+        if geschrieben:
+            print(f"  ok     PDF im Prüfordner: {geschrieben[0].name}")
+        else:
+            nonlocal_fehler[0] += 1
+            print("  FEHLT  PDF im Prüfordner")
+
+        # --- Angebot in Rechnung umwandeln. Steht die Auswahl auf einem
+        # Angebot, heisst ``r`` abrechnen statt eine neue anfangen.
+        await tippen("home")
+        await tippen("r")
+        pruefe("Umwandlung, Schritt 3", "Schritt 3 von 3")
+        pruefe("Positionen übernommen", "Aufnahme Ton")
+        await durch_das_formular(4)
+        pruefe("Rechnung gespeichert", "Gespeichert")
+
+        await tippen("escape", "escape")
+        await tippen("5")
+        pruefe("Rechnung in der Liste", "Rechnung")
 
         # --- Preisliste
         await tippen("escape")

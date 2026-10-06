@@ -119,12 +119,13 @@ def zeichnen(app: FakturApp, ziel: Path) -> Path:
     return ziel
 
 
-async def aufnehmen(befehle: list[str], name: str) -> Path:
+async def aufnehmen(befehle: list[str], name: str, vorbereiten: object = None) -> Path:
     """Startet die App, drückt Tasten und schreibt ein Bild.
 
     Args:
         befehle: Die Tasten in Reihenfolge.
         name: Der Name der Datei ohne Endung.
+        vorbereiten: Eine Funktion, die vor dem ersten Tastendruck läuft.
 
     Returns:
         Der Pfad des Bildes.
@@ -133,19 +134,55 @@ async def aufnehmen(befehle: list[str], name: str) -> Path:
         app = FakturApp(Path(ordner) / "bild.db")
         async with app.run_test(size=(100, 34)) as pilot:
             await pilot.pause()
+            if vorbereiten is not None:
+                await vorbereiten(app, pilot)  # type: ignore[operator]
+                await pilot.pause()
             for taste in befehle:
                 await pilot.press(taste)
                 await pilot.pause()
             return zeichnen(app, ZIEL / f"{name}.png")
 
 
-#: Welche Bildschirme aufgenommen werden: Name und die Tasten dorthin.
+async def _mit_angebot(app: FakturApp, pilot: object) -> None:
+    """Legt einen Kunden und ein Angebot an, damit es etwas zu sehen gibt.
+
+    Args:
+        app: Die laufende App.
+        pilot: Die Teststeuerung von Textual.
+    """
+    from faktur import dateien
+
+    kunde_id = dateien.kunde_speichern(app.db, {"firma": "Soundcheck GmbH"})
+    leistung = dateien.leistungen(app.db)[0]
+    dateien.dokument_speichern(
+        app.db,
+        {
+            "art": "angebot",
+            "nummer": "0001",
+            "kunde_id": kunde_id,
+            "datum": "06.10.2026",
+        },
+        [
+            {
+                "leistung_id": leistung["id"],
+                "bezeichnung": leistung["bezeichnung"],
+                "menge": "2",
+                "einheit": leistung["einheit"],
+                "preis": "850",
+            }
+        ],
+    )
+
+
+#: Welche Bildschirme aufgenommen werden: Name, Tasten, Vorbereitung.
 FAELLE = (
-    ("01_menue", []),
-    ("02_stammdaten", ["6"]),
-    ("03_brieftext", ["6", "3"]),
-    ("04_kunden", ["3"]),
-    ("05_leistungen", ["4"]),
+    ("01_menue", [], None),
+    ("02_stammdaten", ["6"], None),
+    ("03_brieftext", ["6", "3"], None),
+    ("04_kunden", ["3"], _mit_angebot),
+    ("05_leistungen", ["4"], None),
+    ("06_dokumente", ["5"], _mit_angebot),
+    ("07_umwandlung", ["5", "r"], _mit_angebot),
 )
 
 
@@ -155,8 +192,8 @@ async def main() -> None:
     Returns:
         Nichts. Schreibt nach stdout.
     """
-    for name, befehle in FAELLE:
-        pfad = await aufnehmen(befehle, name)
+    for name, befehle, vorbereiten in FAELLE:
+        pfad = await aufnehmen(befehle, name, vorbereiten)
         print(f"  {pfad.name:<22} {pfad.stat().st_size:>7} Bytes")
 
 
