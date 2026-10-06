@@ -11,8 +11,22 @@ cd /home/kyrion/Vibecoding/faktur
 .venv/bin/python -m faktur
 ```
 
-Die Datenbank liegt in `~/.faktur/faktur.db`, das Logo in
-`~/.faktur/logo.png`, die PDF in `~/Rechnungen/`.
+Alles liegt in einem Ordner neben dem Programm:
+
+```
+daten/
+  faktur.db
+  logo.png
+  Dokumente/
+    ANG - 0001 - Soundcheck GmbH.pdf
+    RE - 0002 - Soundcheck GmbH.pdf
+```
+
+Angebot und Rechnung teilen sich den Ordner; die Art steht im Dateinamen.
+Der ganze Bestan liegt an einer Stelle, lässt sich kopieren, verschieben
+oder sichern, ohne dass man wissen muss, wo das Programm installiert ist.
+
+`daten/` steht in `.gitignore`. Die Datenbank gehört nicht ins Repository.
 
 ## Das Menü
 
@@ -56,6 +70,18 @@ Weiterhin möglich, wenn es schneller geht:
 | `esc` | einen Schritt zurück |
 | `Strg+Q` | beenden |
 
+## Angebot in Rechnung
+
+Steht die Auswahl in der Dokumentenliste auf einem **Angebot**, macht `r`
+daraus eine Rechnung. Kunde, alle Positionen, Texte und Preise wandern mit,
+samt der Verknüpfung zur Preisliste. Das Angebot bleibt als Beleg stehen.
+
+Offen bleiben nur Nummer, Datum und Fälligkeit — die stehen schon in der
+Kontrolle, weil sie sich von Rechnung zu Rechnung unterscheiden.
+
+Steht die Auswahl auf keinem Angebot, fängt `r` wie bisher eine neue Rechnung
+an. Die Taste meint immer dasselbe: abrechnen.
+
 ## So arbeitest du damit
 
 **Die Felder sind vorbelegt.** Wo sich etwas ausrechnen lässt, steht der
@@ -69,13 +95,38 @@ dort eine Leistung, dann justierst du Menge und Preis.
 Gesamtbetrag, der Brieftext. Erst dann entsteht das Dokument und die PDF,
 und der Pfad wird dir genannt.
 
-**Angebot zu Rechnung.** Punkt 2 nimmt die Positionen eines Angebots
-unverändert mit. Du gibst nur Datum und Fälligkeit an.
+**Angebot zu Rechnung.** Siehe oben, ein Tastendruck in der Dokumentenliste.
+
+## Nummern
+
+Vier Stellen, führende Nullen: `0001`, `0002`, `0003`. **Angebot und
+Rechnung kommen aus einem Zähler**, damit nebeneinandersteht, dass sie zum
+selben Vorgang gehören. Angebot `0001` und Rechnung `0002` sind Paar und
+Vorgang.
+
+Die Nummer wird vorgeschlagen, aber sie gehört dir und deinem Steuerberater.
+Die Datenbank lässt keine doppelte Nummer zu, auch nicht über die Art
+hinweg.
+
+Beim ersten Start nach dem Umstieg werden die alten Nummern auf vier Stellen
+geschrieben, nach Datum sortiert. Vorher landet eine Kopie neben der
+Datenbank: `daten/faktur.db.bak`.
 
 ## Textbausteine
 
 Unter `6` → `3` und `4`: je ein Text für Angebote und für Rechnungen.
+
+Das ist ein eigener Editor mit Zeilennummern, kein einzeiliges Feld — der
+Text hat Absätze, und die müssen beim Speichern unbeschädigt bleiben.
 Leerzeilen trennen Absätze.
+
+| Taste | Wirkung |
+|---|---|
+| `Strg+S` | speichern |
+| `Strg+R` | den mitgelieferten Vorschlag zurückholen |
+| `esc` | abbrechen |
+
+Unter dem Feld stehen die Namen, die du verwenden kannst.
 
 Doppelte Klammern ersetzt das Programm:
 
@@ -96,17 +147,49 @@ Doppelte Klammern ersetzt das Programm:
 
 **Tippfehler bleiben sichtbar.** `{{Kuude}}` steht als `{{Kuude}}` auf der
 PDF, statt still zu verschwinden. Beim Speichern sagt das Programm, welche
-Namen es nicht kennt. Unter `6` → `5` steht die ganze Liste.
+Namen es nicht kennt.
 
 `{{Kunde_Anrede}}` schneidet den Vornamen ab: aus „Herr Max Mustermann"
 wird „Herr Mustermann". Damit kannst du frei formulieren statt in
 Höflichkeitsformeln zu verfallen.
 
-## Nummern
+## Rabatt
 
-Die Nummer wird vorgeschlagen, aber sie gehört dir und deinem Steuerberater.
-Vergibt sind gleiche Nummern für die gleiche Art: ein Angebot und eine
-Rechnung dürfen beide `2026-001` heißen, zwei Rechnungen nicht.
+Im Schritt mit den Positionen gibt es einen eigenen Punkt **Rabatt
+eintragen**. Gefragt wird nur der Betrag — das Minus setzt das Programm,
+weil ein Rabatt immer abzieht. Die Bezeichnung bleibt „Rabatt" und ist
+änderbar.
+
+```
+Aufnahme Ton                    2 Tag    1.700,00 €
+Mischung und Mastering         10 Stunde     950,00 €
+Rabatt                                        -300,00 €
+                                  Gesamtbetrag  2.350,00 €
+```
+
+Auf der PDF steht der Rabatt in der Akzentfarbe, damit er als eigener
+Posten erkennbar ist, ohne dass die Tabelle bunt wird. Er funktioniert auf
+Angebot und Rechnung gleichermassen, und er wandert bei der Umwandlung eines
+Angebots mit.
+
+Es gibt keinen Prozentrabatt. Dafür müsste das Programm den Betrag aus der
+Zwischensumme rechnen, was bei einem Rabatt auf einen Rabatt unangenehm
+wird.
+
+## Die Farben
+
+Es sind zwei Farben mit demselben Farbton, aber für zwei Untergründe:
+
+| | Wert | Kontrast |
+|---|---|---|
+| PDF, auf Papier | `#512E80` | 10.23:1 |
+| Terminal, Hauptakzent | `#C9B5E3` | 7.28:1 |
+| Terminal, Nebenton | `#A88CD4` | 4.79:1 |
+
+Das Violett aus dem Logo ist auf Papier hervorragend und im Terminal
+unbrauchbar — dort hat es nur 1.33:1, man sieht es kaum noch. Darum sind es
+zwei Werte. Alle stehen in `faktur/farben.py` mit der gemessenen Zahl, und
+`tests/test_farben.py` rechnet nach, damit niemand sie wieder dunkler macht.
 
 ## Wie die PDF aussieht
 
@@ -128,8 +211,10 @@ inklusive Steuer als Endpreis ein.
 | `faktur/app.py` | die App und das Hauptmenü |
 | `faktur/basis.py` | der Rahmen aller Bildschirme |
 | `faktur/widgets.py` | Logo, Auswahlliste, Formular, Tabelle |
+| `faktur/editor.py` | der mehrzeilige Editor für die Brieftexte |
 | `faktur/zeichen.py` | das Logo als Text |
-| `faktur/db.py` | Schema und Verbindung |
+| `faktur/farben.py` | die Farben mit ihrem Kontrast |
+| `faktur/db.py` | Schema, Verbindung, Umzug und Nummern |
 | `faktur/dateien.py` | Kunden, Leistungen, Dokumente |
 | `faktur/einstellungen.py` | Stammdaten, Logo, Textbausteine |
 | `faktur/betraege.py` | Geldbeträge und Datumsangaben |
@@ -142,13 +227,38 @@ Textual hält einen echten Bildschirmpuffer. Die Bildschirme beschreiben nur,
 wie sie aussehen, und Textual zeichnet die Unterschiede. Deshalb bleibt das
 Bild ruhig und nichts läuft über, wenn ein Untermenü zurückkommt.
 
+## Das fertige Programm
+
+Auf macOS entsteht daraus `Faktur.app`, ein Programm mit Symbol zum
+Doppelklicken:
+
+```bash
+.venv/bin/python scripts/app_bauen.py
+```
+
+Dafür gibt es `ANLEITUNG-MAC.md`. Ein Packer übersetzt nicht: was hier auf
+Linux gebaut wird, startet auf keinem Mac. Deshalb baut `scripts/app_bauen.py`
+das Programm auf dem Rechner, auf dem es auch laufen soll.
+
+Für jede Version mit `v` davor baut GitHub das Programm auf einem Mac und
+hängt es an das Release.
+
 ## Entwicklung
 
 ```bash
+.venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt
 .venv/bin/python -m pytest            # Tests
 .venv/bin/python -m ruff check .      # Fehlerprüfung
 .venv/bin/python -m ruff format .     # Formatierung
 ```
+
+`requirements.txt` enthält nur, was das fertige Programm zum Laufen
+braucht. Alles für die Entwicklung steht in `requirements-dev.txt`.
+
+`target-version` in `pyproject.toml` muss zu `requires-python` passen. Steht
+es zu hoch, schreibt ruff Syntax hinaus, die auf einem älteren Python gar
+nicht läuft — mit `py314` ließ es die Klammern um `except` weglassen, und
+das gibt es erst seit Python 3.14.
 
 ### Den Ablauf prüfen
 
@@ -156,16 +266,22 @@ Bild ruhig und nichts läuft über, wenn ein Untermenü zurückkommt.
 .venv/bin/python scripts/durchlauf_pruefen.py   # Daten und PDF ohne Menü
 .venv/bin/python scripts/ablauf_pruefen.py      # ganz durch die Oberfläche
 .venv/bin/python scripts/bild_pruefen.py        # Menü in verschiedenen Grössen
+.venv/bin/python scripts/bilder_speichern.py    # Bildschirme als PNG
 ```
 
 `ablauf_pruefen.py` tippt sich durch die App wie ein Mensch und prüft nach
-jedem Schritt, ob der richtige Bildschirm da steht. Das prüft genau das, woran
-die erste Fassung gescheitert ist.
+jedem Schritt, ob der richtige Bildschirm da steht — inklusive der Umwandlung
+von Angebot in Rechnung. Das prüft genau das, woran die erste Fassung
+gescheitert ist.
+
+`bilder_speichern.py` legt PNG von jedem Bildschirm in `beispiele/` ab. Damit
+sieht man den Kontrast, statt ihn zu rechnen.
 
 ## Was fehlt bewusst
 
-Keine Verträge, keine Projektverwaltung, kein Storno, keine Rabatte, kein
-Mahnwesen. Preise sind Endpreise.
+Keine Verträge, keine Projektverwaltung, kein Storno, keine Mahnwesen, kein
+Prozentrabatt. Preise sind Endpreise. Das Angebot wird beim Umwandeln
+kopiert, nicht verschoben — der Beleg bleibt stehen.
 
 ## Auf macOS und Windows
 

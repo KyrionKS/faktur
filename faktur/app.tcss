@@ -1,7 +1,12 @@
-/* Das Aussehen der ganzen App.
+/* Das Aussehen der ganzes App.
  *
- * Farbton ist die Akzentfarbe aus dem Logo. Alles andere ist ruhig: eine
- * Zeile Abstand, keine Kästen, kein Schatten. */
+ * Die Farben stehen hier als Text, weil Textual das Stylesheet liest und
+ * keine Python-Konstanten kennt. Die Werte kommen aus faktur/farben.py,
+ * wo auch der gemessene Kontrast steht. #C9B5E3 hat 7.28:1 gegen den
+ * dunklen Grund. Das Violett aus dem Logo, #512E80, hat dort nur 1.33:1
+ * und gehört ausschliesslich auf die PDF.
+ *
+ * Alles andere ist ruhig: eine Zeile Abstand, keine Kästen, kein Schatten. */
 
 Screen {
     background: $surface;
@@ -12,7 +17,7 @@ Screen {
 .logo {
     height: auto;
     padding: 0 2;
-    color: #512E80;
+    color: #C9B5E3;
 }
 
 #inhalt {
@@ -58,7 +63,7 @@ Screen {
 Input {
     width: 1fr;
     height: 3;
-    border: tall $panel;
+    border: tall #8A76A5;
     padding: 0 1;
 }
 
@@ -69,12 +74,12 @@ Input {
     height: auto;
     padding: 1 2;
     background: $panel;
-    border: round $accent;
+    border: round #C9B5E3;
 }
 
 #fenster_titel {
     text-style: bold;
-    color: $accent;
+    color: #C9B5E3;
     padding-bottom: 1;
 }
 
@@ -107,7 +112,7 @@ Input {
 }
 
 .summe_wert {
-    color: $accent;
+    color: #C9B5E3;
     text-style: bold;
 }
 

@@ -290,13 +290,20 @@ def tabelle(
     for position in dateien.positionen(db, dokument["id"]):
         betrag = position["menge"] * position["preis"]
         summe += betrag
+        ist_rabatt = betrag < 0
+        # Ein Rabatt steht in derselben Schrift wie die anderen Zeilen, aber
+        # in der Akzentfarbe. So ist er als eigener Posten erkennbar, ohne
+        # dass die Tabelle bunt wird.
+        text_stil = stil["rabatt_text"] if ist_rabatt else stil["tab_text"]
+        zahl_stil = stil["rabatt_zahl"] if ist_rabatt else stil["tab_zahl"]
+
         zeilen.append(
             [
-                Paragraph(sauber(position["bezeichnung"]), stil["tab_text"]),
-                Paragraph(betraege.menge(position["menge"]), stil["tab_zahl"]),
-                Paragraph(sauber(position["einheit"]), stil["tab_text"]),
-                Paragraph(betraege.euro(position["preis"]), stil["tab_zahl"]),
-                Paragraph(betraege.euro(betrag), stil["tab_zahl"]),
+                Paragraph(sauber(position["bezeichnung"]), text_stil),
+                Paragraph(betraege.menge(position["menge"]), zahl_stil),
+                Paragraph(sauber(position["einheit"]), text_stil),
+                Paragraph(betraege.euro(position["preis"]), zahl_stil),
+                Paragraph(betraege.euro(betrag), zahl_stil),
             ]
         )
 

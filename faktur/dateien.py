@@ -9,6 +9,8 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Sequence
 
+from faktur.db import nummer_aus
+
 #: Die Spalten eines Kunden, in der Reihenfolge des Formulars.
 KUNDENFELDER = (
     "firma",
@@ -288,23 +290,39 @@ def summe_von(db: sqlite3.Connection, dokument_id: int) -> float:
     return float(zeile["summe"])
 
 
-def nummern(db: sqlite3.Connection, art: str) -> list[str]:
-    """Gibt die schon vergebenen Nummern einer Art zurück.
+def nummern(db: sqlite3.Connection) -> list[str]:
+    """Gibt alle vergebenen Dokumentnummern zurück.
+
+    Angebot und Rechnung kommen aus einem Zähler, deshalb wird nicht nach
+    Art gefiltert. Nur so lässt sich prüfen, ob eine Nummer wirklich frei ist.
 
     Args:
         db: Die Datenbankverbindung.
-        art: ``angebot`` oder ``rechnung``.
 
     Returns:
         Die Nummern als Liste.
     """
     return [
         zeile["nummer"]
-        for zeile in db.execute(
-            "SELECT nummer FROM dokumente WHERE art = ? AND nummer <> ''",
-            (art,),
-        )
+        for zeile in db.execute("SELECT nummer FROM dokumente WHERE nummer <> ''")
     ]
+
+
+def naechste_nummer(db: sqlite3.Connection) -> str:
+    """Schlägt die nächste freie Dokumentnummer vor.
+
+    Args:
+        db: Die Datenbankverbindung.
+
+    Returns:
+        Die Nummer mit führenden Nullen, etwa ``0003``. Bei einer leeren
+        Liste beginnt der Zähler bei ``0001``.
+    """
+    hoechste = 0
+    for nummer in nummern(db):
+        if nummer.isdigit():
+            hoechste = max(hoechste, int(nummer))
+    return nummer_aus(hoechste + 1)
 
 
 def dokument_speichern(
@@ -326,8 +344,9 @@ def dokument_speichern(
         Die Nummer des gespeicherten Dokuments.
 
     Raises:
-        sqlite3.IntegrityError: Wenn die Nummer für diese Art schon vergeben
-            ist.
+        sqlite3.IntegrityError: Wenn die Nummer schon vergeben ist. Angebot
+            und Rechnung kommen aus einem Zähler, die Nummer muss für sich
+            allein eindeutig sein.
     """
     from faktur.betraege import zahl
 

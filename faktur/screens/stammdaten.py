@@ -9,10 +9,12 @@ from __future__ import annotations
 import sqlite3
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.widgets import Static
 
 from faktur import einstellungen, texte
 from faktur.basis import BasisScreen
+from faktur.editor import Brieftext
 from faktur.widgets import Auswahl, Formular
 
 #: Die Felder in der Reihenfolge des Formulars.
@@ -133,7 +135,16 @@ class StammdatenFormularScreen(BasisScreen):
 
 
 class BausteinScreen(BasisScreen):
-    """Der Brieftext für Angebote oder Rechnungen."""
+    """Der Brieftext für Angebote oder Rechnungen.
+
+    Mehrzeilig, weil Absätze durch Leerzeilen getrennt sind. Gespeichert wird
+    mit ``Strg+S``, abgebrochen mit ``esc``, der Vorschlag kommt mit ``Strg+R``
+    zurück, falls beim Herumtippen alles kaputtgeht.
+    """
+
+    BINDINGS = [
+        Binding("ctrl+r", "vorschlag", "Vorschlag", show=True),
+    ]
 
     def __init__(self, verbindung: sqlite3.Connection, art: str) -> None:
         """Legt den Bildschirm an.
@@ -146,48 +157,54 @@ class BausteinScreen(BasisScreen):
         self.art = art
 
     def inhalt(self) -> ComposeResult:
-        """Baut das Formular für den Text.
+        """Baut den Editor.
 
         Yields:
             Die Kindelemente.
         """
-        vorschlag = einstellungen.baustein(self.db, self.art)
-        werte = {"text": vorschlag}
-        yield Static(
-            "Leerzeilen trennen Absätze. Doppelte Klammern ersetzt das "
-            "Programm, zum Beispiel {{Kunde_Anrede}}.",
-            classes="hinweis",
+        was = "Angebote" if self.art == "angebot" else "Rechnungen"
+        yield Brieftext(
+            einstellungen.baustein(self.db, self.art),
+            f"Text für {was}. Leerzeilen trennen Absätze.",
+            vorschlag=lambda: einstellungen.BAUSTEINE_VORSCHLAG.get(
+                f"text_{self.art}", ""
+            ),
         )
-        yield Formular([("text", "Brieftext", "")], werte)
 
     def start_fokus(self) -> None:
-        """Legt den Cursor in das Textfeld."""
-        self.query_one(Formular).focus_first()
+        """Legt den Cursor in den Text."""
+        self.query_one(Brieftext).start_fokus()
 
-    def on_formular_fertig(self, event: Formular.Fertig) -> None:
-        """Speichert den Baustein und sagt, was unbekannt ist.
+    def action_vorschlag(self) -> None:
+        """Setzt den mitgelieferten Vorschlag zurück."""
+        editor = self.query_one(Brieftext)
+        editor.vorschlag_einsetzen()
+        editor.hinweis("Der Vorschlag steht wieder drin. Strg+S zum Speichern.")
+        editor.start_fokus()
+
+    def on_brieftext_gespeichert(self, event: Brieftext.Gespeichert) -> None:
+        """Speichert den Baustein und sagt, welche Namen unbekannt sind.
 
         Args:
-            event: Die Nachricht des Formulars.
+            event: Die Nachricht des Editors.
         """
-        text = event.werte.get("text", "")
-
-        if not text.strip():
+        if not event.text.strip():
             self.meldung(
                 "Leerer Text. Nimm den Vorschlag oder schreib etwas.", gut=False
             )
+            self.query_one(Brieftext).start_fokus()
             return
 
-        einstellungen.speichere(self.db, f"text_{self.art}", text)
+        einstellungen.speichere(self.db, f"text_{self.art}", event.text)
         self.app.pop_screen()
 
-        unbekannt = texte.unbekannte(text)
+        unbekannt = texte.unbekannte(event.text)
         if unbekannt:
             self.hinweis("Gespeichert. Unbekannt: " + ", ".join(unbekannt), gut=False)
         else:
             self.hinweis("Gespeichert.")
 
-    def on_formular_verloren(self) -> None:
+    def on_brieftext_verloren(self) -> None:
         """Geht zurück, ohne zu speichern."""
         self.app.pop_screen()
 

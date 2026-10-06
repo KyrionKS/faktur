@@ -7,6 +7,7 @@ sammeln, nachsehen, speichern. Die PDF entsteht dabei von selbst.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -21,35 +22,37 @@ KOPFFELDER_ANGEBOT = [
     ("nummer", "Nummer", ""),
     ("datum", "Datum", ""),
     ("gueltig_bis", "Gültig bis", ""),
-    ("notiz", "Notiz für das Dokument", ""),
+    ("notiz", "Notiz", "Nur auf diesem Dokument"),
 ]
 
 KOPFFELDER_RECHNUNG = [
     ("nummer", "Nummer", ""),
     ("datum", "Datum", ""),
     ("faellig", "Fällig am", ""),
-    ("notiz", "Notiz für das Dokument", ""),
+    ("notiz", "Notiz", "Nur auf diesem Dokument"),
 ]
 
 
 def dateiname(dokument: sqlite3.Row, art: str) -> str:
     """Baut den Dateinamen einer PDF.
 
-    Schrägstriche und Doppelpunkte werden ersetzt. Sonst legt ein Name wie
-    ``Bild/Video AG`` ungewollte Ordner im Rechnungsordner an.
+    Angebot und Rechnung liegen im selben Ordner, die Art steht deshalb im
+    Namen:
+
+        ANG - 0001 - Soundcheck GmbH
+        RE - 0002 - Soundcheck GmbH
 
     Args:
         dokument: Das Dokument.
-        art: Wird bei Angeboten dem Namen vorangestellt.
+        art: ``angebot`` oder ``rechnung``.
 
     Returns:
         Der Dateiname, ohne Ordner und ohne Endung.
     """
+    kennung = "ANG" if art == "angebot" else "RE"
     nummer = _sicher(dokument["nummer"] or str(dokument["id"]))
     kunde = _sicher(dokument["firma"] or "ohne Kunde")
-    if art == "angebot":
-        return f"ANG-{nummer}_{kunde}"
-    return f"{nummer}_{kunde}"
+    return f"{kennung} - {nummer} - {kunde}"
 
 
 def _sicher(text: str) -> str:
@@ -63,7 +66,7 @@ def _sicher(text: str) -> str:
     """
     for zeichen in '/\\:*?"<>|':
         text = text.replace(zeichen, "-")
-    return text.replace("\n", " ").strip()
+    return " ".join(text.split())
 
 
 class DokumentenScreen(BasisScreen):
@@ -71,7 +74,8 @@ class DokumentenScreen(BasisScreen):
 
     BINDINGS = [
         Binding("a", "angebot", "Neues Angebot", show=True),
-        Binding("r", "rechnung", "Neue Rechnung", show=True),
+        Binding("r", "rechnung", "Abrechnen", show=True),
+        Binding("enter", "pdf", "PDF neu schreiben", show=True),
     ]
 
     def __init__(
@@ -153,21 +157,40 @@ class DokumentenScreen(BasisScreen):
         self.app.push_screen(EditorScreen(self.db, "angebot"))
 
     def action_rechnung(self) -> None:
-        """Beginnt eine neue Rechnung."""
+        """Rechnet ab, oder macht aus dem Angebot eine Rechnung.
+
+        Steht die Auswahl auf einem Angebot, wird daraus eine Rechnung. Sonst
+        fängt eine neue Rechnung an. So heisst ``r`` immer das Gleiche:
+        abrechnen.
+        """
+        tabelle = self.query(Tabelle)
+        if (
+            tabelle
+            and tabelle.first()
+            and tabelle.first().index < len(self.dokumente)
+            and self.dokumente[tabelle.first().index]["art"] == "angebot"
+        ):
+            self.angebot_zu_rechnung()
+            return
         self.app.push_screen(EditorScreen(self.db, "rechnung"))
 
-    def on_tabelle_gewaehlt(self, event: Tabelle.Gewaehlt) -> None:
-        """Schreibt die PDF des gewählten Dokuments neu.
+    def action_pdf(self) -> None:
+        """Schreibt die PDF des markierten Dokuments neu."""
+        self.markiertes_dokument_schreiben()
 
-        Args:
-            event: Die Nachricht der Tabelle.
+    def markiertes_dokument_schreiben(self) -> None:
+        """Nimmt das markierte Dokument und schreibt die PDF.
+
+        Geht ohne Auswahl nicht, weil es dann nichts zu schreiben gäbe.
         """
-        if event.zeile >= len(self.dokumente):
+        tabelle = self.query_one(Tabelle)
+        if tabelle.index >= len(self.dokumente):
             return
 
-        dokument = self.dokumente[event.zeile]
+        dokument = self.dokumente[tabelle.index]
         voll = dateien.dokument_holen(self.db, dokument["id"])
         if voll is None:
+            self.meldung("Das Dokument gibt es nicht mehr.", gut=False)
             return
 
         ziel = db.ausgabeordner() / f"{dateiname(voll, voll['art'])}.pdf"
@@ -178,6 +201,42 @@ class DokumentenScreen(BasisScreen):
             return
 
         self.meldung(f"Geschrieben: {ziel}")
+
+    def angebot_zu_rechnung(self) -> None:
+        """Macht aus dem markierten Angebot eine Rechnung.
+
+        Kunde und Positionen wandern mit, samt der Verknüpfung zur
+        Preisliste. Offen bleiben nur Nummer, Datum und Fälligkeit, die
+        stehen in der Kontrolle.
+        """
+        tabelle = self.query_one(Tabelle)
+        if tabelle.index >= len(self.dokumente):
+            return
+
+        dokument = self.dokumente[tabelle.index]
+        if dokument["art"] != "angebot":
+            self.meldung(
+                "Nur aus einem Angebot wird eine Rechnung. Markiert ist eine Rechnung.",
+                gut=False,
+            )
+            return
+
+        try:
+            kopf, positionen = dateien.als_angebot_uebernehmen(self.db, dokument["id"])
+        except ValueError:
+            self.meldung("Das Angebot liess sich nicht lesen.", gut=False)
+            return
+
+        editor = EditorScreen(self.db, "rechnung", kopf, positionen, direkt=True)
+        self.app.push_screen(editor)
+
+    def on_tabelle_gewaehlt(self, event: Tabelle.Gewaehlt) -> None:
+        """Schreibt die PDF des gewählten Dokuments neu.
+
+        Args:
+            event: Die Nachricht der Tabelle.
+        """
+        self.markiertes_dokument_schreiben()
 
     def on_tabelle_loeschen(self, event: Tabelle.Loeschen) -> None:
         """Fragt nach und löscht dann.
@@ -216,6 +275,7 @@ class EditorScreen(BasisScreen):
         art: str,
         angaben: dict[str, str | int | None] | None = None,
         positionen: list[dict[str, str | float | int | None]] | None = None,
+        direkt: bool = False,
     ) -> None:
         """Legt den Editor an.
 
@@ -224,11 +284,14 @@ class EditorScreen(BasisScreen):
             art: ``angebot`` oder ``rechnung``.
             angaben: Werte für den Kopf, etwa aus einem Angebot übernommen.
             positionen: Positionen, etwa aus einem Angebot übernommen.
+            direkt: Wenn wahr, wird die Kundenauswahl übersprungen. Beim
+                Umwandeln eines Angebots ist der Kunde längst bekannt.
         """
         super().__init__(verbindung)
         self.art = art
         self.angaben: dict[str, str | int | None] = angaben or {}
         self.positionen: list[dict[str, str | float | int | None]] = positionen or []
+        self.direkt = direkt
         self._titel = "Angebot" if art == "angebot" else "Rechnung"
 
     def inhalt(self) -> ComposeResult:
@@ -259,6 +322,20 @@ class EditorScreen(BasisScreen):
         )
         yield Auswahl(punkte, self.kunde_gewaehlt)
 
+    def start_fokus(self) -> None:
+        """Springt direkt zur Kontrolle, wenn Kunde und Positionen da sind.
+
+        Beim Umwandeln eines Angebots gibt es nichts zu wählen: Der Kunde
+        steht fest, die Positionen sind übernommen. Es fehlen nur Nummer,
+        Datum und Fälligkeit.
+        """
+        if self.direkt and self.angaben.get("kunde_id"):
+            self.app.push_screen(KontrolleScreen(self.db, self.art, self))
+            return
+        auswahl = self.query(Auswahl)
+        if auswahl:
+            auswahl.first().focus()
+
     def kunde_gewaehlt(self, kunde_id: str) -> None:
         """Weiter zu den Positionen.
 
@@ -275,22 +352,18 @@ class EditorScreen(BasisScreen):
             feld: Der Name des Feldes.
 
         Returns:
-            Der Vorschlag als Text.
+            Der Vorschlag als Text. Datum und Termin sind rechenbar, die
+            Notiz bekommt keinen.
         """
-        nummern = dateien.nummern(self.db, self.art)
-        jahr = betraege.jahr()
-
         if feld == "datum":
             return betraege.heute()
-        if feld in ("faellig",):
+        if feld == "faellig":
             return betraege.plus_tage(14)
         if feld == "gueltig_bis":
             return betraege.plus_tage(21)
-        if feld == "nummer" and nummern:
-            letzte = max((int(n[:4]) for n in nummern if n[:4].isdigit()), default=0)
-            folgen = [n for n in nummern if n[:4] == str(letzte)]
-            return f"{jahr}-{len(folgen) + 1:03d}"
-        return f"{jahr}-001"
+        if feld == "nummer":
+            return dateien.naechste_nummer(self.db)
+        return ""
 
 
 class PositionenScreen(BasisScreen):
@@ -352,6 +425,14 @@ class PositionenScreen(BasisScreen):
                 "Eine Leistung hinzufügen",
             )
         )
+        punkte.append(
+            (
+                "rabatt",
+                "%",
+                "Rabatt eintragen",
+                "Einen festen Betrag abziehen",
+            )
+        )
         punkte.append(("fertig", "⏎", "Fertig", "Weiter zur Kontrolle"))
 
         yield Auswahl(tuple(punkte), self.gewaehlt)
@@ -396,11 +477,35 @@ class PositionenScreen(BasisScreen):
             self.app.push_screen(
                 LeistungAuswahlScreen(self.db, self.art, self._position_gesetzt)
             )
+        elif aktion == "rabatt":
+            self.app.push_screen(RabattScreen(self.db, self._rabatt_gesetzt))
         elif aktion.startswith("p"):
             nummer = int(aktion[1:]) - 1
             self.app.push_screen(
                 FreiePositionScreen(self.db, self.art, self._position_geaendert, nummer)
             )
+
+    def _rabatt_gesetzt(self, betrag: float, bezeichnung: str) -> None:
+        """Nimmt den Rabatt als Position auf.
+
+        Springt nicht selbst zurück: :class:`RabattScreen` räumt sich ab,
+        sobald es den Betrag durchgegeben hat. Zwei Pops für einen Push
+        kämen einen Bildschirm zu weit zurück.
+
+        Args:
+            betrag: Der Betrag als positiver Wert, etwa ``300``.
+            bezeichnung: Die Bezeichnung auf dem Dokument.
+        """
+        self.positionen.append(
+            {
+                "leistung_id": None,
+                "bezeichnung": bezeichnung,
+                "menge": 1,
+                "einheit": "",
+                "preis": -abs(betrag),
+            }
+        )
+        self.eltern.positionen = self.positionen
 
     def _position_gesetzt(self, position: dict[str, str | float | int | None]) -> None:
         """Nimmt eine neue Position auf.
@@ -510,6 +615,73 @@ class LeistungAuswahlScreen(BasisScreen):
             _nummer: Ungenutzt, die Leistung wird immer angehängt.
         """
         self.fertig(position)
+        self.app.pop_screen()
+
+
+class RabattScreen(BasisScreen):
+    """Einen festen Rabattbetrag eintragen.
+
+    Gefragt wird nur der Betrag. Das Vorzeichen wird selbst gesetzt, weil
+    ein Rabatt immer abzieht. Die Bezeichnung bleibt "Rabatt" und ist
+    aenderbar, falls auf dem Dokument etwas anderes stehen soll.
+    """
+
+    #: Die Beschriftung, die auf dem Dokument steht.
+    BEZEICHNUNG = "Rabatt"
+
+    def __init__(
+        self,
+        verbindung: sqlite3.Connection,
+        fertig: Callable[[float, str], None],
+    ) -> None:
+        """Legt den Bildschirm an.
+
+        Args:
+            verbindung: Die Datenbankverbindung.
+            fertig: Wird mit Betrag und Bezeichnung aufgerufen.
+        """
+        super().__init__(verbindung)
+        self.fertig = fertig
+
+    def inhalt(self) -> ComposeResult:
+        """Baut das Formular.
+
+        Yields:
+            Die Kindelemente.
+        """
+        yield Static(
+            "Der Betrag wird abgezogen, das Minus setzt das Programm.",
+            classes="hinweis",
+        )
+        yield Formular(
+            [
+                ("betrag", "Rabatt", "300,00"),
+                ("bezeichnung", "Bezeichnung", self.BEZEICHNUNG),
+            ]
+        )
+
+    def start_fokus(self) -> None:
+        """Legt den Cursor ins Betragsfeld."""
+        self.query_one(Formular).focus_first()
+
+    def on_formular_fertig(self, event: Formular.Fertig) -> None:
+        """Gibt Betrag und Bezeichnung nach oben.
+
+        Args:
+            event: Die Nachricht des Formulars.
+        """
+        betrag = betraege.zahl(event.werte.get("betrag"))
+
+        if betrag == 0:
+            self.meldung("Ohne Betrag waere das kein Rabatt.", gut=False)
+            return
+
+        bezeichnung = event.werte.get("bezeichnung", "").strip() or self.BEZEICHNUNG
+        self.fertig(betrag, bezeichnung)
+        self.app.pop_screen()
+
+    def on_formular_verloren(self) -> None:
+        """Geht zurueck, ohne zu speichern."""
         self.app.pop_screen()
 
 
@@ -713,10 +885,8 @@ class KontrolleScreen(BasisScreen):
             return
 
         nummer = str(angaben["nummer"]).strip()
-        if nummer in dateien.nummern(self.db, self.art):
-            self.meldung(
-                f"Die Nummer {nummer} ist für diese Art schon vergeben.", gut=False
-            )
+        if nummer in dateien.nummern(self.db):
+            self.meldung(f"Die Nummer {nummer} ist schon vergeben.", gut=False)
             return
 
         art = self.art

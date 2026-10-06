@@ -42,7 +42,15 @@ async def durchlauf() -> int:
     """
     ordner = Path(tempfile.mkdtemp(prefix="faktur_ablauf_"))
     fehler = 0
+    nonlocal_fehler = [0]
     app = FakturApp(ordner / "ablauf.db")
+
+    # Die App legt ihre PDF in den echten Rechnungsordner im Heimverzeichnis.
+    # Beim Prüfen gehört das in einen Ordner, der danach weg kann, sonst
+    # landen Testdokumente zwischen den echten Rechnungen.
+    from faktur import db as db_modul
+
+    db_modul.DOKUMENTE = ordner / "Dokumente"
 
     async with app.run_test(size=(100, 34)) as pilot:
 
@@ -138,10 +146,23 @@ async def durchlauf() -> int:
         await durch_das_formular(4)
         pruefe("Position übernommen", "Aufnahme Ton")
 
+        # Rabatt als eigene Position. Die Summe sinkt um genau den Betrag.
+        # Nach dem Neuausbau steht der Cursor auf der ersten Position, der
+        # Rabattpunkt ist der dritte.
+        await tippen("down", "down")
+        pruefe("Rabatt im Menue", "Rabatt eintragen")
+        await tippen("enter")
+        pruefe("Rabatt-Eingabe", "das Minus setzt das Programm")
+        for zeichen in "300":
+            await tippen(zeichen)
+        await tippen("enter", "enter")
+        pruefe("Rabatt übernommen", "-300,00 €")
+
         await tippen("end")
         await tippen("enter")  # "Fertig"
         pruefe("Kontrolle", "Schritt 3 von 3")
-        pruefe("Summe sichtbar", "€")
+        # Die Position wurde mit Menge 1 übernommen: 850 minus 300.
+        pruefe("Summe mit Rabatt", "550,00 €")
 
         await durch_das_formular(4)
         pruefe("Angebot gespeichert", "Gespeichert")
@@ -153,6 +174,26 @@ async def durchlauf() -> int:
         await tippen("enter")
         pruefe("PDF geschrieben", "Geschrieben")
 
+        geschrieben = list((ordner / "Dokumente").glob("*.pdf"))
+        if geschrieben:
+            print(f"  ok     PDF im Prüfordner: {geschrieben[0].name}")
+        else:
+            nonlocal_fehler[0] += 1
+            print("  FEHLT  PDF im Prüfordner")
+
+        # --- Angebot in Rechnung umwandeln. Steht die Auswahl auf einem
+        # Angebot, heisst ``r`` abrechnen statt eine neue anfangen.
+        await tippen("home")
+        await tippen("r")
+        pruefe("Umwandlung, Schritt 3", "Schritt 3 von 3")
+        pruefe("Positionen übernommen", "Aufnahme Ton")
+        await durch_das_formular(4)
+        pruefe("Rechnung gespeichert", "Gespeichert")
+
+        await tippen("escape", "escape")
+        await tippen("5")
+        pruefe("Rechnung in der Liste", "Rechnung")
+
         # --- Preisliste
         await tippen("escape")
         await tippen("4")
@@ -162,16 +203,38 @@ async def durchlauf() -> int:
         await tippen("escape")
         await tippen("6")
         pruefe("Stammdaten", "Firma und Bank")
-        await tippen("enter")
-        pruefe("Stammdaten-Formular", "Firmenname")
-        await tippen("escape")
 
+        # Der Brieftext ist mehrzeilig. Das war der Grund für den eigenen
+        # Editor: ein einzeiliges Eingabefeld klappt die Absätze zusammen.
+        await tippen("3")
+        pruefe("Brieftext-Editor", "Text für Angebote")
+        pruefe("Zeilennummern", " 1 ")
+
+        await tippen("ctrl+home")
+        for zeile in ("Hallo {{Kunde_Anrede}},", "", "Angebot für Ihr Projekt."):
+            if zeile:
+                await tippen(*zeile)
+            await tippen("enter")
+        await tippen("ctrl+s")
+        pruefe("Brieftext gespeichert", "Gespeichert")
+
+        gespeichert = app.db.execute(
+            "SELECT wert FROM einstellungen WHERE schluessel = 'text_angebot'"
+        ).fetchone()
+        if gespeichert and "Angebot für Ihr Projekt." in gespeichert["wert"]:
+            print("  ok     Absätze unbeschädigt gespeichert")
+        else:
+            nonlocal_fehler[0] += 1
+            print("  FEHLT  Absätze unbeschädigt gespeichert")
+
+        await tippen("escape")
         await tippen("escape")
         pruefe("zurueck im Menue", "Beenden")
 
     app.db.close()
     shutil.rmtree(ordner, ignore_errors=True)
 
+    fehler += nonlocal_fehler[0]
     print()
     print("Alles in Ordnung." if fehler == 0 else f"{fehler} Prüfungen fehlgeschlagen.")
     return fehler

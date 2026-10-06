@@ -10,9 +10,6 @@ Die Vorlage liegt in ``~/.faktur/logo.png`` und wird für die PDF benutzt.
 
 from __future__ import annotations
 
-#: Die Akzentfarbe des Logos, auch in der PDF verwendet.
-AKZENT = "#512E80"
-
 #: Das Gitter mit den Rauten, 32 Zeichen breit und 8 Zeilen hoch.
 #:
 #: ``◆`` steht für einen Rauten, ``╲`` und ``╱`` für die beiden

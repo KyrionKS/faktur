@@ -1,0 +1,11 @@
+# Nur zum Entwickeln. Gehoeren nicht in das fertige Programm.
+#
+#     .venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt
+
+pytest==9.1.1
+ruff==0.16.10
+
+# Indirekte Abhaengigkeiten, hier festgehalten, damit die Ergebnisse
+# zwischen zwei Rechnern vergleichbar bleiben.
+iniconfig==2.3.0
+pluggy==1.6.0

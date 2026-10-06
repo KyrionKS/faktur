@@ -88,3 +88,38 @@ def test_euro_rundet_kaufmaennisch() -> None:
     assert betraege.euro(0.005) == "0,01 €"
     assert betraege.euro(1.005) == "1,01 €"
     assert betraege.euro(3290.004) == "3.290,00 €"
+
+
+@pytest.mark.parametrize(
+    ("wert", "erwartet"),
+    [
+        (-500.0, "-500,00 €"),
+        (-1234.5, "-1.234,50 €"),
+        (-0.005, "-0,01 €"),
+        (0.0, "0,00 €"),
+        (500.0, "500,00 €"),
+    ],
+)
+def test_euro_behaelt_das_vorzeichen(wert: float, erwartet: str) -> None:
+    """Eine Rabattposition muss mit Minus erscheinen.
+
+    Ein Rabatt von 500 Euro, der als 500,00 Euro gedruckt wird, lässt die
+    Summe auf der Rechnung falsch aussehen.
+
+    Args:
+        wert: Der Betrag.
+        erwartet: Der Text.
+    """
+    assert betraege.euro(wert) == erwartet
+
+
+def test_rabatt_senkt_die_summe() -> None:
+    """Zwei Positionen und ein Rabatt ergeben die erwartete Summe."""
+    positionen = [
+        ("Aufnahme Ton", 2, 850.0),
+        ("Mischung", 10, 95.0),
+        ("Rabatt", 1, -300.0),
+    ]
+    summe = sum(menge * preis for _name, menge, preis in positionen)
+
+    assert betraege.euro(summe) == "2.350,00 €"

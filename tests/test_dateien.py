@@ -151,23 +151,83 @@ def test_doppelte_nummer_wird_abgewiesen(verbindung: sqlite3.Connection) -> None
         )
 
 
-def test_gleiche_nummer_fuer_angebot_und_rechnung(
+def test_gleiche_nummer_fuer_angebot_und_rechnung_geht_nicht(
     verbindung: sqlite3.Connection,
 ) -> None:
-    """Angebote und Rechnungen werden getrennt gezählt.
+    """Ein Zähler für beide Arten, also auch eine Nummer für beide.
+
+    Angebot und Rechnung eines Vorgangs sollen nebeneinander stehen, etwa
+    0001 und 0002. Trügen beide dieselbe Nummer, wäre am Papier nicht mehr zu
+    sehen, dass sie zusammengehören.
 
     Args:
         verbindung: Die Testdatenbank.
     """
     dateien.dokument_speichern(
-        verbindung, {"art": "angebot", "nummer": "2026-001", "datum": "06.10.2026"}, []
-    )
-    dateien.dokument_speichern(
-        verbindung, {"art": "rechnung", "nummer": "2026-001", "datum": "06.10.2026"}, []
+        verbindung, {"art": "angebot", "nummer": "0001", "datum": "06.10.2026"}, []
     )
 
-    assert "2026-001" in dateien.nummern(verbindung, "angebot")
-    assert "2026-001" in dateien.nummern(verbindung, "rechnung")
+    with pytest.raises(sqlite3.IntegrityError):
+        dateien.dokument_speichern(
+            verbindung,
+            {"art": "rechnung", "nummer": "0001", "datum": "06.10.2026"},
+            [],
+        )
+
+
+def test_zaehler_zaehlt_ueber_beide_arten(verbindung: sqlite3.Connection) -> None:
+    """Der Zähler läuft durch, er beginnt nicht je Art neu.
+
+    Args:
+        verbindung: Die Testdatenbank.
+    """
+    assert dateien.naechste_nummer(verbindung) == "0001"
+
+    dateien.dokument_speichern(
+        verbindung, {"art": "angebot", "nummer": "0001", "datum": "06.10.2026"}, []
+    )
+    assert dateien.naechste_nummer(verbindung) == "0002"
+
+    dateien.dokument_speichern(
+        verbindung, {"art": "rechnung", "nummer": "0002", "datum": "07.10.2026"}, []
+    )
+    assert dateien.naechste_nummer(verbindung) == "0003"
+
+
+def test_zaehler_springt_ueber_freie_nummern(verbindung: sqlite3.Connection) -> None:
+    """Der Vorschlag ist die höchste vergebene plus eins.
+
+    Args:
+        verbindung: Die Testdatenbank.
+    """
+    for nummer in ("0001", "0007"):
+        dateien.dokument_speichern(
+            verbindung,
+            {"art": "rechnung", "nummer": nummer, "datum": "06.10.2026"},
+            [],
+        )
+
+    assert dateien.naechste_nummer(verbindung) == "0008"
+
+
+def test_zaehler_ignoriert_alte_nummern_mit_jahr(
+    verbindung: sqlite3.Connection,
+) -> None:
+    """Eine Zahl wie 2026-199 zählt nicht mit.
+
+    Solche Nummern gab es vorher. Sie enthalten keine Zahl, die man als
+    Zählerstand lesen könnte, also dürfen sie den Vorschlag nicht verschieben.
+
+    Args:
+        verbindung: Die Testdatenbank.
+    """
+    dateien.dokument_speichern(
+        verbindung,
+        {"art": "rechnung", "nummer": "2026-199", "datum": "06.10.2026"},
+        [],
+    )
+
+    assert dateien.naechste_nummer(verbindung) == "0001"
 
 
 def test_dokument_aendern_ersetzt_die_positionen(
@@ -274,3 +334,96 @@ def test_leistung_loeschen_behaelt_alte_dokumente(
     assert positionen[0]["bezeichnung"] == "Ton"
     assert positionen[0]["preis"] == 850.0
     assert positionen[0]["leistung_id"] is None
+
+
+def test_angebot_wird_zur_rechnung_mit_alle_positionen(
+    verbindung: sqlite3.Connection,
+) -> None:
+    """Beim Umwandeln darf keine Position verloren gehen.
+
+    Args:
+        verbindung: Die Testdatenbank.
+    """
+    kunde_id = dateien.kunde_speichern(verbindung, {"firma": "Film AG"})
+    leistungen = dateien.leistungen(verbindung)
+    ton = leistungen[0]
+    mischung = leistungen[1]
+
+    angebot_id = dateien.dokument_speichern(
+        verbindung,
+        {
+            "art": "angebot",
+            "nummer": "0001",
+            "kunde_id": kunde_id,
+            "datum": "01.10.2026",
+            "gueltig_bis": "22.10.2026",
+            "notiz": "Angebot gilt drei Wochen.",
+        },
+        [
+            {
+                "leistung_id": ton["id"],
+                "bezeichnung": ton["bezeichnung"],
+                "menge": "2",
+                "einheit": "Tag",
+                "preis": "850",
+            },
+            {
+                "leistung_id": mischung["id"],
+                "bezeichnung": mischung["bezeichnung"],
+                "menge": "10",
+                "einheit": "Stunde",
+                "preis": "95",
+            },
+        ],
+    )
+
+    kopf, positionen = dateien.als_angebot_uebernehmen(verbindung, angebot_id)
+
+    rechnung_id = dateien.dokument_speichern(verbindung, kopf, positionen)
+    rechnung = dateien.dokument_holen(verbindung, rechnung_id)
+
+    assert rechnung is not None
+    assert rechnung["art"] == "rechnung"
+    assert rechnung["kunde_id"] == kunde_id
+    assert rechnung["notiz"] == "Angebot gilt drei Wochen."
+    # Datum und Fälligkeit bleiben leer, die kommen in der Kontrolle dazu.
+    assert rechnung["datum"] == ""
+    assert rechnung["faellig"] == ""
+
+    uebernommen = dateien.positionen(verbindung, rechnung_id)
+    assert len(uebernommen) == 2
+    assert [p["bezeichnung"] for p in uebernommen] == [
+        ton["bezeichnung"],
+        mischung["bezeichnung"],
+    ]
+    assert dateien.summe_von(verbindung, rechnung_id) == 2650.0
+    # Die Verknüpfung zur Preisliste bleibt, damit später zugeordnet
+    # werden kann, welcher Preis zu welcher Leistung gehört.
+    assert uebernommen[0]["leistung_id"] == ton["id"]
+
+
+def test_angebot_bleibt_beim_umwandeln_bestehen(
+    verbindung: sqlite3.Connection,
+) -> None:
+    """Das Angebot wird nicht verbraucht, es bleibt als Beleg stehen.
+
+    Args:
+        verbindung: Die Testdatenbank.
+    """
+    kunde_id = dateien.kunde_speichern(verbindung, {"firma": "Werbe GmbH"})
+    angebot_id = dateien.dokument_speichern(
+        verbindung,
+        {
+            "art": "angebot",
+            "nummer": "0001",
+            "kunde_id": kunde_id,
+            "datum": "01.10.2026",
+        },
+        [{"bezeichnung": "Jingle", "menge": "1", "preis": "450"}],
+    )
+
+    kopf, positionen = dateien.als_angebot_uebernehmen(verbindung, angebot_id)
+    dateien.dokument_speichern(verbindung, kopf, positionen)
+
+    assert dateien.dokument_holen(verbindung, angebot_id) is not None
+    assert len(dateien.positionen(verbindung, angebot_id)) == 1
