@@ -174,6 +174,38 @@ async def _mit_angebot(app: FakturApp, pilot: object) -> None:
     )
 
 
+async def _mit_positionen(app: FakturApp, pilot: object) -> None:
+    """Legt einen Kunden und ein Angebot mit Rabatt an.
+
+    Args:
+        app: Die laufende App.
+        pilot: Die Teststeuerung von Textual.
+    """
+    from faktur import dateien
+
+    kunde_id = dateien.kunde_speichern(app.db, {"firma": "Soundcheck GmbH"})
+    leistung = dateien.leistungen(app.db)[0]
+    dateien.dokument_speichern(
+        app.db,
+        {
+            "art": "angebot",
+            "nummer": "0001",
+            "kunde_id": kunde_id,
+            "datum": "06.10.2026",
+        },
+        [
+            {
+                "leistung_id": leistung["id"],
+                "bezeichnung": leistung["bezeichnung"],
+                "menge": "2",
+                "einheit": leistung["einheit"],
+                "preis": "850",
+            },
+            {"bezeichnung": "Rabatt", "menge": "1", "einheit": "", "preis": "-300"},
+        ],
+    )
+
+
 #: Welche Bildschirme aufgenommen werden: Name, Tasten, Vorbereitung.
 FAELLE = (
     ("01_menue", [], None),
@@ -183,6 +215,7 @@ FAELLE = (
     ("05_leistungen", ["4"], None),
     ("06_dokumente", ["5"], _mit_angebot),
     ("07_umwandlung", ["5", "r"], _mit_angebot),
+    ("08_positionen", ["1", "enter"], _mit_positionen),
 )
 
 

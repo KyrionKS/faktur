@@ -11,8 +11,22 @@ cd /home/kyrion/Vibecoding/faktur
 .venv/bin/python -m faktur
 ```
 
-Die Datenbank liegt in `~/.faktur/faktur.db`, das Logo in
-`~/.faktur/logo.png`, die PDF in `~/Rechnungen/`.
+Alles liegt in einem Ordner neben dem Programm:
+
+```
+daten/
+  faktur.db
+  logo.png
+  Dokumente/
+    ANG - 0001 - Soundcheck GmbH.pdf
+    RE - 0002 - Soundcheck GmbH.pdf
+```
+
+Angebot und Rechnung teilen sich den Ordner; die Art steht im Dateinamen.
+Der ganze Bestan liegt an einer Stelle, lässt sich kopieren, verschieben
+oder sichern, ohne dass man wissen muss, wo das Programm installiert ist.
+
+`daten/` steht in `.gitignore`. Die Datenbank gehört nicht ins Repository.
 
 ## Das Menü
 
@@ -96,7 +110,7 @@ hinweg.
 
 Beim ersten Start nach dem Umstieg werden die alten Nummern auf vier Stellen
 geschrieben, nach Datum sortiert. Vorher landet eine Kopie neben der
-Datenbank: `~/.faktur/faktur.db.bak`.
+Datenbank: `daten/faktur.db.bak`.
 
 ## Textbausteine
 
@@ -139,6 +153,29 @@ Namen es nicht kennt.
 wird „Herr Mustermann". Damit kannst du frei formulieren statt in
 Höflichkeitsformeln zu verfallen.
 
+## Rabatt
+
+Im Schritt mit den Positionen gibt es einen eigenen Punkt **Rabatt
+eintragen**. Gefragt wird nur der Betrag — das Minus setzt das Programm,
+weil ein Rabatt immer abzieht. Die Bezeichnung bleibt „Rabatt" und ist
+änderbar.
+
+```
+Aufnahme Ton                    2 Tag    1.700,00 €
+Mischung und Mastering         10 Stunde     950,00 €
+Rabatt                                        -300,00 €
+                                  Gesamtbetrag  2.350,00 €
+```
+
+Auf der PDF steht der Rabatt in der Akzentfarbe, damit er als eigener
+Posten erkennbar ist, ohne dass die Tabelle bunt wird. Er funktioniert auf
+Angebot und Rechnung gleichermassen, und er wandert bei der Umwandlung eines
+Angebots mit.
+
+Es gibt keinen Prozentrabatt. Dafür müsste das Programm den Betrag aus der
+Zwischensumme rechnen, was bei einem Rabatt auf einen Rabatt unangenehm
+wird.
+
 ## Die Farben
 
 Es sind zwei Farben mit demselben Farbton, aber für zwei Untergründe:
@@ -177,7 +214,7 @@ inklusive Steuer als Endpreis ein.
 | `faktur/editor.py` | der mehrzeilige Editor für die Brieftexte |
 | `faktur/zeichen.py` | das Logo als Text |
 | `faktur/farben.py` | die Farben mit ihrem Kontrast |
-| `faktur/db.py` | Schema, Verbindung und der Umstieg |
+| `faktur/db.py` | Schema, Verbindung, Umzug und Nummern |
 | `faktur/dateien.py` | Kunden, Leistungen, Dokumente |
 | `faktur/einstellungen.py` | Stammdaten, Logo, Textbausteine |
 | `faktur/betraege.py` | Geldbeträge und Datumsangaben |
@@ -217,9 +254,9 @@ sieht man den Kontrast, statt ihn zu rechnen.
 
 ## Was fehlt bewusst
 
-Keine Verträge, keine Projektverwaltung, kein Storno, keine Rabatte, kein
-Mahnwesen. Preise sind Endpreise. Das Angebot wird beim Umwandeln kopiert,
-nicht verschoben — der Beleg bleibt stehen.
+Keine Verträge, keine Projektverwaltung, kein Storno, keine Mahnwesen, kein
+Prozentrabatt. Preise sind Endpreise. Das Angebot wird beim Umwandeln
+kopiert, nicht verschoben — der Beleg bleibt stehen.
 
 ## Auf macOS und Windows
 
