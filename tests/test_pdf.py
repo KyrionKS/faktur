@@ -313,3 +313,103 @@ def test_beide_arten_gehen(
     pdf.erzeugen(verbindung, dokument, ziel)
 
     assert ziel.is_file()
+
+
+def test_rabatt_position_senkt_die_summe(
+    verbindung: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """Ein Rabatt zieht genau seinen Betrag von der Summe ab.
+
+    Args:
+        verbindung: Die Testdatenbank.
+        tmp_path: Das temporäre Verzeichnis von pytest.
+    """
+    _vorbereiten(verbindung)
+    dokument_id = dateien.dokument_speichern(
+        verbindung,
+        {"art": "rechnung", "nummer": "0001", "datum": "06.10.2026"},
+        [
+            {"bezeichnung": "Aufnahme Ton", "menge": "2", "preis": "850"},
+            {"bezeichnung": "Mischung", "menge": "10", "preis": "95"},
+            {"bezeichnung": "Rabatt", "menge": "1", "preis": "-300"},
+        ],
+    )
+
+    assert dateien.summe_von(verbindung, dokument_id) == 2350.0
+
+    dokument = dateien.dokument_holen(verbindung, dokument_id)
+    assert dokument is not None
+    ziel = tmp_path / "rabatt.pdf"
+    pdf.erzeugen(verbindung, dokument, ziel)
+
+    assert ziel.is_file()
+
+
+def test_rabatt_auch_auf_dem_angebot(
+    verbindung: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """Der Rabatt funktioniert auf Angebot und Rechnung gleichermassen.
+
+    Args:
+        verbindung: Die Testdatenbank.
+        tmp_path: Das temporäre Verzeichnis von pytest.
+    """
+    _vorbereiten(verbindung)
+
+    for art in ("angebot", "rechnung"):
+        dokument_id = dateien.dokument_speichern(
+            verbindung,
+            {"art": art, "nummer": f"1-{art}", "datum": "06.10.2026"},
+            [
+                {"bezeichnung": "Jingle", "menge": "1", "preis": "450"},
+                {"bezeichnung": "Rabatt", "menge": "1", "preis": "-50"},
+            ],
+        )
+        assert dateien.summe_von(verbindung, dokument_id) == 400.0
+
+        dokument = dateien.dokument_holen(verbindung, dokument_id)
+        assert dokument is not None
+        ziel = tmp_path / f"rabatt_{art}.pdf"
+        pdf.erzeugen(verbindung, dokument, ziel)
+        assert ziel.is_file()
+
+
+def test_dateiname_hat_art_nummer_und_kunde(verbindung: sqlite3.Connection) -> None:
+    """Angebot und Rechnung tragen ihre Art im Dateinamen.
+
+    Args:
+        verbindung: Die Testdatenbank.
+    """
+    from faktur.screens.dokumente import dateiname
+
+    _vorbereiten(verbindung)
+    kunde = dateien.kunden(verbindung)[0]
+
+    angebot_id = dateien.dokument_speichern(
+        verbindung,
+        {
+            "art": "angebot",
+            "nummer": "0001",
+            "kunde_id": kunde["id"],
+            "datum": "06.10.2026",
+        },
+        [{"bezeichnung": "Ton", "preis": "100"}],
+    )
+    rechnung_id = dateien.dokument_speichern(
+        verbindung,
+        {
+            "art": "rechnung",
+            "nummer": "0002",
+            "kunde_id": kunde["id"],
+            "datum": "06.10.2026",
+        },
+        [{"bezeichnung": "Ton", "preis": "100"}],
+    )
+
+    angebot = dateien.dokument_holen(verbindung, angebot_id)
+    rechnung = dateien.dokument_holen(verbindung, rechnung_id)
+    assert angebot is not None
+    assert rechnung is not None
+
+    assert dateiname(angebot, "angebot") == "ANG - 0001 - Soundcheck GmbH"
+    assert dateiname(rechnung, "rechnung") == "RE - 0002 - Soundcheck GmbH"

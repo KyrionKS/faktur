@@ -75,14 +75,18 @@ def euro(wert: float) -> str:
     Nachkommastellen. Ein Geldbetrag ohne Nachkommastellen sieht auf einer
     Rechnung unvollständig aus, deshalb wird nicht gekürzt.
 
+    Das Vorzeichen bleibt stehen. Eine Rabattposition trägt einen negativen
+    Betrag, und ``-300,00 €`` gehört auf die Rechnung, nicht ``300,00 €``.
+    Sonst sähe es aus, als würde die Summe steigen.
+
     Args:
         wert: Der Betrag.
 
     Returns:
-        Der Text, etwa ``3.290,00 €``.
+        Der Text, etwa ``3.290,00 €`` oder ``−300,00 €``.
     """
     gerundet = _runden(wert)
-    text = f"{abs(gerundet):,.2f}"
+    text = f"{gerundet:,.2f}"
     ganz, _, nachkomma = text.partition(".")
     return f"{ganz.replace(',', '.')},{nachkomma} {EUER}"
 

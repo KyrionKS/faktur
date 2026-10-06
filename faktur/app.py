@@ -107,12 +107,13 @@ class FakturApp(App[None]):
     SUB_TITLE = "New Air Media Group"
 
     def __init__(self, datenbankpfad: Path | None = None) -> None:
-        """Legt die App an.
+        """Legt die App an und holt alte Dateien an ihren neuen Ort.
 
         Args:
             datenbankpfad: Eine andere Datenbank als sonst, für Tests.
         """
         super().__init__()
+        self.umgezogen = db.umziehen()
         self.db = db.verbinden(datenbankpfad)
 
     def on_mount(self) -> None:
@@ -122,4 +123,7 @@ class FakturApp(App[None]):
 
 def main() -> None:
     """Startet das Programm."""
-    FakturApp().run()
+    app = FakturApp()
+    for meldung in app.umgezogen:
+        print(f"  {meldung}")
+    app.run()

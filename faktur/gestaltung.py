@@ -154,6 +154,23 @@ def stile() -> dict[str, object]:
             textColor=hex_rgb(AKZENT),
             alignment=2,
         ),
+        # Eine Rabattposition. Sie steht in der Akzentfarbe, damit man sie
+        # auf Anhieb sieht, aber nicht so, dass die Tabelle bunt wirkt.
+        "rabatt_text": ParagraphStyle(
+            "rabatt_text",
+            fontName=SCHRIFT,
+            fontSize=GRUND,
+            leading=13,
+            textColor=hex_rgb(AKZENT),
+        ),
+        "rabatt_zahl": ParagraphStyle(
+            "rabatt_zahl",
+            fontName=SCHRIFT,
+            fontSize=GRUND,
+            leading=13,
+            textColor=hex_rgb(AKZENT),
+            alignment=2,
+        ),
         "klein": ParagraphStyle(
             "klein",
             fontName=SCHRIFT,

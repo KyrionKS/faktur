@@ -7,6 +7,7 @@ sammeln, nachsehen, speichern. Die PDF entsteht dabei von selbst.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -35,21 +36,23 @@ KOPFFELDER_RECHNUNG = [
 def dateiname(dokument: sqlite3.Row, art: str) -> str:
     """Baut den Dateinamen einer PDF.
 
-    Schrägstriche und Doppelpunkte werden ersetzt. Sonst legt ein Name wie
-    ``Bild/Video AG`` ungewollte Ordner im Rechnungsordner an.
+    Angebot und Rechnung liegen im selben Ordner, die Art steht deshalb im
+    Namen:
+
+        ANG - 0001 - Soundcheck GmbH
+        RE - 0002 - Soundcheck GmbH
 
     Args:
         dokument: Das Dokument.
-        art: Wird bei Angeboten dem Namen vorangestellt.
+        art: ``angebot`` oder ``rechnung``.
 
     Returns:
         Der Dateiname, ohne Ordner und ohne Endung.
     """
+    kennung = "ANG" if art == "angebot" else "RE"
     nummer = _sicher(dokument["nummer"] or str(dokument["id"]))
     kunde = _sicher(dokument["firma"] or "ohne Kunde")
-    if art == "angebot":
-        return f"ANG-{nummer}_{kunde}"
-    return f"{nummer}_{kunde}"
+    return f"{kennung} - {nummer} - {kunde}"
 
 
 def _sicher(text: str) -> str:
@@ -63,7 +66,7 @@ def _sicher(text: str) -> str:
     """
     for zeichen in '/\\:*?"<>|':
         text = text.replace(zeichen, "-")
-    return text.replace("\n", " ").strip()
+    return " ".join(text.split())
 
 
 class DokumentenScreen(BasisScreen):
@@ -213,8 +216,7 @@ class DokumentenScreen(BasisScreen):
         dokument = self.dokumente[tabelle.index]
         if dokument["art"] != "angebot":
             self.meldung(
-                "Nur aus einem Angebot wird eine Rechnung. "
-                "Markiert ist eine Rechnung.",
+                "Nur aus einem Angebot wird eine Rechnung. Markiert ist eine Rechnung.",
                 gut=False,
             )
             return
@@ -423,6 +425,14 @@ class PositionenScreen(BasisScreen):
                 "Eine Leistung hinzufügen",
             )
         )
+        punkte.append(
+            (
+                "rabatt",
+                "%",
+                "Rabatt eintragen",
+                "Einen festen Betrag abziehen",
+            )
+        )
         punkte.append(("fertig", "⏎", "Fertig", "Weiter zur Kontrolle"))
 
         yield Auswahl(tuple(punkte), self.gewaehlt)
@@ -467,11 +477,35 @@ class PositionenScreen(BasisScreen):
             self.app.push_screen(
                 LeistungAuswahlScreen(self.db, self.art, self._position_gesetzt)
             )
+        elif aktion == "rabatt":
+            self.app.push_screen(RabattScreen(self.db, self._rabatt_gesetzt))
         elif aktion.startswith("p"):
             nummer = int(aktion[1:]) - 1
             self.app.push_screen(
                 FreiePositionScreen(self.db, self.art, self._position_geaendert, nummer)
             )
+
+    def _rabatt_gesetzt(self, betrag: float, bezeichnung: str) -> None:
+        """Nimmt den Rabatt als Position auf.
+
+        Springt nicht selbst zurück: :class:`RabattScreen` räumt sich ab,
+        sobald es den Betrag durchgegeben hat. Zwei Pops für einen Push
+        kämen einen Bildschirm zu weit zurück.
+
+        Args:
+            betrag: Der Betrag als positiver Wert, etwa ``300``.
+            bezeichnung: Die Bezeichnung auf dem Dokument.
+        """
+        self.positionen.append(
+            {
+                "leistung_id": None,
+                "bezeichnung": bezeichnung,
+                "menge": 1,
+                "einheit": "",
+                "preis": -abs(betrag),
+            }
+        )
+        self.eltern.positionen = self.positionen
 
     def _position_gesetzt(self, position: dict[str, str | float | int | None]) -> None:
         """Nimmt eine neue Position auf.
@@ -581,6 +615,73 @@ class LeistungAuswahlScreen(BasisScreen):
             _nummer: Ungenutzt, die Leistung wird immer angehängt.
         """
         self.fertig(position)
+        self.app.pop_screen()
+
+
+class RabattScreen(BasisScreen):
+    """Einen festen Rabattbetrag eintragen.
+
+    Gefragt wird nur der Betrag. Das Vorzeichen wird selbst gesetzt, weil
+    ein Rabatt immer abzieht. Die Bezeichnung bleibt "Rabatt" und ist
+    aenderbar, falls auf dem Dokument etwas anderes stehen soll.
+    """
+
+    #: Die Beschriftung, die auf dem Dokument steht.
+    BEZEICHNUNG = "Rabatt"
+
+    def __init__(
+        self,
+        verbindung: sqlite3.Connection,
+        fertig: Callable[[float, str], None],
+    ) -> None:
+        """Legt den Bildschirm an.
+
+        Args:
+            verbindung: Die Datenbankverbindung.
+            fertig: Wird mit Betrag und Bezeichnung aufgerufen.
+        """
+        super().__init__(verbindung)
+        self.fertig = fertig
+
+    def inhalt(self) -> ComposeResult:
+        """Baut das Formular.
+
+        Yields:
+            Die Kindelemente.
+        """
+        yield Static(
+            "Der Betrag wird abgezogen, das Minus setzt das Programm.",
+            classes="hinweis",
+        )
+        yield Formular(
+            [
+                ("betrag", "Rabatt", "300,00"),
+                ("bezeichnung", "Bezeichnung", self.BEZEICHNUNG),
+            ]
+        )
+
+    def start_fokus(self) -> None:
+        """Legt den Cursor ins Betragsfeld."""
+        self.query_one(Formular).focus_first()
+
+    def on_formular_fertig(self, event: Formular.Fertig) -> None:
+        """Gibt Betrag und Bezeichnung nach oben.
+
+        Args:
+            event: Die Nachricht des Formulars.
+        """
+        betrag = betraege.zahl(event.werte.get("betrag"))
+
+        if betrag == 0:
+            self.meldung("Ohne Betrag waere das kein Rabatt.", gut=False)
+            return
+
+        bezeichnung = event.werte.get("bezeichnung", "").strip() or self.BEZEICHNUNG
+        self.fertig(betrag, bezeichnung)
+        self.app.pop_screen()
+
+    def on_formular_verloren(self) -> None:
+        """Geht zurueck, ohne zu speichern."""
         self.app.pop_screen()
 
 

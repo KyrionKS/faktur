@@ -1,8 +1,19 @@
 """Schema und Verbindung zur Datenbank.
 
-Die Daten liegen in einer SQLite-Datei im Heimverzeichnis. Es gibt keinen
-Server und keine Konfigurationsdatei: ``~/.faktur/faktur.db`` ist die ganze
-Datenhaltung.
+Die Daten liegen in einer SQLite-Datei neben dem Programm, in ``daten/``.
+Das ist Absicht: der ganze Bestand an Kunden, Angeboten und Rechnungen steht
+in einem Ordner, der sich kopieren, verschieben oder sichern lässt, ohne
+dass man wissen muss, wo das Programm überall auf der Platte liegt.
+
+    daten/
+      faktur.db
+      logo.png
+      Dokumente/
+        ANG - 0001 - Soundcheck GmbH.pdf
+
+Früher lagen Datenbank und Dokumente an zwei verschiedenen Stellen im
+Heimverzeichnis. Beim ersten Start wird eine solche Datei hierher verschoben,
+damit die vorhandenen Kunden und Preise nicht verloren gehen.
 """
 
 from __future__ import annotations
@@ -11,8 +22,8 @@ import shutil
 import sqlite3
 from pathlib import Path
 
-#: Der Ordner, in dem die Datenbank und das Logo liegen.
-DATENORDNER = Path.home() / ".faktur"
+#: Der Ordner neben dem Programm, in dem alles liegt.
+DATENORDNER = Path(__file__).resolve().parent.parent / "daten"
 
 #: Die Datenbank selbst.
 DATENBANK = DATENORDNER / "faktur.db"
@@ -20,8 +31,14 @@ DATENBANK = DATENORDNER / "faktur.db"
 #: Das Logo fuer die PDF, falls in den Einstellungen keines liegt.
 STANDARD_LOGO = DATENORDNER / "logo.png"
 
-#: Wo die erzeugten PDF landen.
-RECHNUNGEN = Path.home() / "Rechnungen"
+#: Der Ordner, in den die PDF geschrieben werden.
+DOKUMENTE = DATENORDNER / "Dokumente"
+
+#: Wo vor dem Umstieg die Daten lagen. Beim ersten Start wird von dort
+#: hierher verschoben, damit die vorhandenen Kunden und Preise nicht
+#: verloren gehen.
+ALT_DATENORDNER = Path.home() / ".faktur"
+ALT_DOKUMENTE = Path.home() / "Rechnungen"
 
 #: Das Schema. Wird bei jedem Start angelegt, wenn etwas fehlt.
 SCHEMA = """
@@ -253,11 +270,71 @@ def nummer_aus(zahl: int) -> str:
 def ausgabeordner() -> Path:
     """Sorgt dafür, dass der Ordner für die PDF existiert.
 
+    Angebot und Rechnung liegen im selben Ordner. Welche es ist, steht im
+    Dateinamen: ``ANG - 0001 - …`` und ``RE - 0002 - …``.
+
     Returns:
         Der Pfad, in den die PDF geschrieben werden.
     """
-    RECHNUNGEN.mkdir(parents=True, exist_ok=True)
-    return RECHNUNGEN
+    DOKUMENTE.mkdir(parents=True, exist_ok=True)
+    return DOKUMENTE
+
+
+def umziehen() -> list[str]:
+    """Bringt eine ältere Datei an den heutigen Ort.
+
+    Vorher lagen die Daten in ``~/.faktur`` und die PDF in
+    ``~/Rechnungen``. Beides wird hierher verschoben, nicht kopiert, damit
+    an der alten Stelle nichts zurückbleibt, das auseinanderläuft.
+
+    Verschoben wird nur, was noch nicht da ist. Läuft die App zweimal, ist
+    beim zweiten Mal nichts zu tun. Die beiden alten Orte werden einzeln
+    geprüft, denn es kann sein, dass es nur einen davon noch gibt.
+
+    Returns:
+        Die Meldungen für den Benutzer, eine je verschobener Sache.
+    """
+    meldungen: list[str] = []
+
+    if ALT_DATENORDNER.is_dir():
+        DATENORDNER.mkdir(parents=True, exist_ok=True)
+        meldungen += _umziehen_aus(ALT_DATENORDNER)
+
+    if ALT_DOKUMENTE.is_dir() and any(ALT_DOKUMENTE.glob("*.pdf")):
+        DOKUMENTE.mkdir(parents=True, exist_ok=True)
+        for pdf in sorted(ALT_DOKUMENTE.glob("*.pdf")):
+            ziel = DOKUMENTE / pdf.name
+            if ziel.exists():
+                continue
+            shutil.move(str(pdf), str(ziel))
+            meldungen.append(f"{pdf.name} nach Dokumente/ verschoben")
+
+    return meldungen
+
+
+def _umziehen_aus(quelle: Path) -> list[str]:
+    """Verschiebt die Dateien eines alten Datenordners.
+
+    Args:
+        quelle: Der alte Ordner.
+
+    Returns:
+        Die Meldungen für den Benutzer.
+    """
+    meldungen: list[str] = []
+
+    alt = quelle / DATENBANK.name
+    if alt.is_file() and not DATENBANK.exists():
+        shutil.move(str(alt), str(DATENBANK))
+        meldungen.append("Datenbank übernommen")
+
+    for name in ("logo.png", "faktur.db.bak"):
+        quelle_datei = quelle / name
+        if quelle_datei.is_file() and not (DATENORDNER / name).exists():
+            shutil.move(str(quelle_datei), str(DATENORDNER / name))
+            meldungen.append(f"{name} übernommen")
+
+    return meldungen
 
 
 def schliessen(verbindung: sqlite3.Connection) -> None:

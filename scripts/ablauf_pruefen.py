@@ -50,7 +50,7 @@ async def durchlauf() -> int:
     # landen Testdokumente zwischen den echten Rechnungen.
     from faktur import db as db_modul
 
-    db_modul.RECHNUNGEN = ordner / "Rechnungen"
+    db_modul.DOKUMENTE = ordner / "Dokumente"
 
     async with app.run_test(size=(100, 34)) as pilot:
 
@@ -146,10 +146,23 @@ async def durchlauf() -> int:
         await durch_das_formular(4)
         pruefe("Position übernommen", "Aufnahme Ton")
 
+        # Rabatt als eigene Position. Die Summe sinkt um genau den Betrag.
+        # Nach dem Neuausbau steht der Cursor auf der ersten Position, der
+        # Rabattpunkt ist der dritte.
+        await tippen("down", "down")
+        pruefe("Rabatt im Menue", "Rabatt eintragen")
+        await tippen("enter")
+        pruefe("Rabatt-Eingabe", "das Minus setzt das Programm")
+        for zeichen in "300":
+            await tippen(zeichen)
+        await tippen("enter", "enter")
+        pruefe("Rabatt übernommen", "-300,00 €")
+
         await tippen("end")
         await tippen("enter")  # "Fertig"
         pruefe("Kontrolle", "Schritt 3 von 3")
-        pruefe("Summe sichtbar", "€")
+        # Die Position wurde mit Menge 1 übernommen: 850 minus 300.
+        pruefe("Summe mit Rabatt", "550,00 €")
 
         await durch_das_formular(4)
         pruefe("Angebot gespeichert", "Gespeichert")
@@ -161,7 +174,7 @@ async def durchlauf() -> int:
         await tippen("enter")
         pruefe("PDF geschrieben", "Geschrieben")
 
-        geschrieben = list((ordner / "Rechnungen").glob("*.pdf"))
+        geschrieben = list((ordner / "Dokumente").glob("*.pdf"))
         if geschrieben:
             print(f"  ok     PDF im Prüfordner: {geschrieben[0].name}")
         else:
