@@ -227,21 +227,22 @@ Textual hält einen echten Bildschirmpuffer. Die Bildschirme beschreiben nur,
 wie sie aussehen, und Textual zeichnet die Unterschiede. Deshalb bleibt das
 Bild ruhig und nichts läuft über, wenn ein Untermenü zurückkommt.
 
-## Das fertige Programm
+## Starten
 
-Auf macOS entsteht daraus `Faktur.app`, ein Programm mit Symbol zum
-Doppelklicken:
+Faktur wird aus dem Quelltext gestartet, auf jedem System gleich:
 
 ```bash
-.venv/bin/python scripts/app_bauen.py
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m faktur
 ```
 
-Dafür gibt es `ANLEITUNG-MAC.md`. Ein Packer übersetzt nicht: was hier auf
-Linux gebaut wird, startet auf keinem Mac. Deshalb baut `scripts/app_bauen.py`
-das Programm auf dem Rechner, auf dem es auch laufen soll.
+Für den Mac gibt es `ANLEITUNG-MAC.md` mit denselben drei Schritten und den
+Fällen, die dort schon vorgekommen sind.
 
-Für jede Version mit `v` davor baut GitHub das Programm auf einem Mac und
-hängt es an das Release.
+Es gibt bewusst kein gebautes `.app`. Ein Packer übersetzt nicht: was auf
+einem Rechner gebaut wird, startet auf einem anderen nicht zuverlässig. Ein
+Programm im Terminal braucht das auch nicht — es braucht Python, und das
+ist auf jedem Rechner in zwei Minuten installiert.
 
 ## Entwicklung
 
