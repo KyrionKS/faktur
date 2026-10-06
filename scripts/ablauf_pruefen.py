@@ -42,6 +42,7 @@ async def durchlauf() -> int:
     """
     ordner = Path(tempfile.mkdtemp(prefix="faktur_ablauf_"))
     fehler = 0
+    nonlocal_fehler = [0]
     app = FakturApp(ordner / "ablauf.db")
 
     async with app.run_test(size=(100, 34)) as pilot:
@@ -162,16 +163,38 @@ async def durchlauf() -> int:
         await tippen("escape")
         await tippen("6")
         pruefe("Stammdaten", "Firma und Bank")
-        await tippen("enter")
-        pruefe("Stammdaten-Formular", "Firmenname")
-        await tippen("escape")
 
+        # Der Brieftext ist mehrzeilig. Das war der Grund für den eigenen
+        # Editor: ein einzeiliges Eingabefeld klappt die Absätze zusammen.
+        await tippen("3")
+        pruefe("Brieftext-Editor", "Text für Angebote")
+        pruefe("Zeilennummern", " 1 ")
+
+        await tippen("ctrl+home")
+        for zeile in ("Hallo {{Kunde_Anrede}},", "", "Angebot für Ihr Projekt."):
+            if zeile:
+                await tippen(*zeile)
+            await tippen("enter")
+        await tippen("ctrl+s")
+        pruefe("Brieftext gespeichert", "Gespeichert")
+
+        gespeichert = app.db.execute(
+            "SELECT wert FROM einstellungen WHERE schluessel = 'text_angebot'"
+        ).fetchone()
+        if gespeichert and "Angebot für Ihr Projekt." in gespeichert["wert"]:
+            print("  ok     Absätze unbeschädigt gespeichert")
+        else:
+            nonlocal_fehler[0] += 1
+            print("  FEHLT  Absätze unbeschädigt gespeichert")
+
+        await tippen("escape")
         await tippen("escape")
         pruefe("zurueck im Menue", "Beenden")
 
     app.db.close()
     shutil.rmtree(ordner, ignore_errors=True)
 
+    fehler += nonlocal_fehler[0]
     print()
     print("Alles in Ordnung." if fehler == 0 else f"{fehler} Prüfungen fehlgeschlagen.")
     return fehler
