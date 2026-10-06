@@ -227,13 +227,38 @@ Textual hält einen echten Bildschirmpuffer. Die Bildschirme beschreiben nur,
 wie sie aussehen, und Textual zeichnet die Unterschiede. Deshalb bleibt das
 Bild ruhig und nichts läuft über, wenn ein Untermenü zurückkommt.
 
+## Das fertige Programm
+
+Auf macOS entsteht daraus `Faktur.app`, ein Programm mit Symbol zum
+Doppelklicken:
+
+```bash
+.venv/bin/python scripts/app_bauen.py
+```
+
+Dafür gibt es `ANLEITUNG-MAC.md`. Ein Packer übersetzt nicht: was hier auf
+Linux gebaut wird, startet auf keinem Mac. Deshalb baut `scripts/app_bauen.py`
+das Programm auf dem Rechner, auf dem es auch laufen soll.
+
+Für jede Version mit `v` davor baut GitHub das Programm auf einem Mac und
+hängt es an das Release.
+
 ## Entwicklung
 
 ```bash
+.venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt
 .venv/bin/python -m pytest            # Tests
 .venv/bin/python -m ruff check .      # Fehlerprüfung
 .venv/bin/python -m ruff format .     # Formatierung
 ```
+
+`requirements.txt` enthält nur, was das fertige Programm zum Laufen
+braucht. Alles für die Entwicklung steht in `requirements-dev.txt`.
+
+`target-version` in `pyproject.toml` muss zu `requires-python` passen. Steht
+es zu hoch, schreibt ruff Syntax hinaus, die auf einem älteren Python gar
+nicht läuft — mit `py314` ließ es die Klammern um `except` weglassen, und
+das gibt es erst seit Python 3.14.
 
 ### Den Ablauf prüfen
 

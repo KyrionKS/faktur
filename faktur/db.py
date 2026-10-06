@@ -22,8 +22,12 @@ import shutil
 import sqlite3
 from pathlib import Path
 
-#: Der Ordner neben dem Programm, in dem alles liegt.
-DATENORDNER = Path(__file__).resolve().parent.parent / "daten"
+from faktur import orte
+
+#: Der Ordner neben dem Programm, in dem alles liegt. Wird aus
+#: :mod:`faktur.orte` geholt, damit Quelltext und gebautes Programm
+#: denselben Weg nehmen.
+DATENORDNER = orte.datenordner()
 
 #: Die Datenbank selbst.
 DATENBANK = DATENORDNER / "faktur.db"

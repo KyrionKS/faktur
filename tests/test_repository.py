@@ -96,8 +96,7 @@ def test_der_datenordner_wird_ignoriert() -> None:
         pytest.skip("Kein Git vorhanden")
 
     assert ".gitignore" in ergebnis, (
-        "daten/faktur.db wird nicht ignoriert. Die Datei würde beim "
-        "Hochladen mitgehen."
+        "daten/faktur.db wird nicht ignoriert. Die Datei würde beim Hochladen mitgehen."
     )
 
 
@@ -112,20 +111,15 @@ def test_die_ignore_liste_hat_keine_gefaehrliche_ausnahme() -> None:
     )
 
     ausnahmen = [
-        zeile.strip()
-        for zeile in inhalt.splitlines()
-        if zeile.strip().startswith("!")
+        zeile.strip() for zeile in inhalt.splitlines() if zeile.strip().startswith("!")
     ]
 
     gefaehrlich = [
-        zeile
-        for zeile in ausnahmen
-        if zeile.lstrip("!").startswith("daten/")
+        zeile for zeile in ausnahmen if zeile.lstrip("!").startswith("daten/")
     ]
 
     assert gefaehrlich == [], (
-        "Die .gitignore nimmt Ausnahmen für den Datenordner: "
-        + ", ".join(gefaehrlich)
+        "Die .gitignore nimmt Ausnahmen für den Datenordner: " + ", ".join(gefaehrlich)
     )
 
 

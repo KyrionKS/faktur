@@ -1,12 +1,19 @@
 [project]
 name = "faktur"
-version = "0.1.0"
+version = "0.3.0"
 description = "Angebote und Rechnungen fuer die New Air Media Group"
-requires-python = ">=3.14"
+# Der Code kommt mit Python 3.10 durch. Hoeher angesetzt zu sein macht nur
+# die Installation auf einem Mac schwerer, weil dort ein altes Python
+# mitgeliefert wird. tests/test_repository.py haelt das fest.
+requires-python = ">=3.11"
 
 [tool.ruff]
 line-length = 88
-target-version = "py314"
+# Muss zu requires-python passen. Steht er zu hoch, schreibt ruff
+# Syntax hinaus, die auf einem aelteren Python gar nicht laeuft:
+# mit py314 ließ es die Klammern um except weglassen, und das gibt es
+# erst seit Python 3.14.
+target-version = "py311"
 src = ["faktur", "tests"]
 
 [tool.ruff.lint]

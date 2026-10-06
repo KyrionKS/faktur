@@ -1,11 +1,21 @@
 .venv/
+
+# Das venv, in dem gebaut wird. Wird bei jedem Bauvorgang neu angelegt.
+.buildvenv/
+
+# Ergebnis und Zwischenstufe des Bauvorgangs. Beides ist Maschine und
+# gehoert nicht ins Repository; das fertige Programm gibt es als Release.
+dist/
+build/
+
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
 
-# Die Daten des Benutzers: Datenbank, Logo und PDF. Gehören nicht ins
-# Repository, auch nicht in ein Backup davon.
+# Die Daten des Benutzers: Datenbank, Logo und PDF. Gehoeren nicht ins
+# Repository, auch nicht in ein Backup davon. tests/test_repository.py
+# schlaegt an, sobald hier etwas durchrauscht.
 daten/
 
 # Die Beispieldateien lassen sich jederzeit neu erzeugen

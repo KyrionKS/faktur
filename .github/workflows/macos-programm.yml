@@ -1,0 +1,88 @@
+# Baut das Programm als macOS-Anwendung.
+#
+# Laeuft nur, wenn eine Version mit v vorangestellt wird. Dann haengt der
+# Bauvorgang die fertige Datei an das Release dieser Version.
+#
+# Warum macOS und nicht Linux: ein Packer uebersetzt nicht. Was auf Linux
+# entsteht, startet auf keinem Mac. Umgekehrt gilt dasselbe, darum wird hier
+# ein Mac-Laeufer gebraucht.
+#
+# Wichtig: Die Schluessel dieser Datei muessen englisch heissen. Nur die
+# Kommentare und die Namen der Schritte duerfen deutsch sein.
+
+name: macos-programm
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# Ein erzeugtes Release braucht Schreibrecht. Ohne diesen Eintrag darf das
+# automatische Token nichts anlegen, und der Bauvorgang scheitert erst ganz
+# am Ende, nachdem er minuteslang gelaufen ist.
+permissions:
+  contents: write
+
+jobs:
+  bauen:
+    # Apple Silicon. Fuer einen Intel-Mac waere macos-13 statt dessen noetig.
+    runs-on: macos-latest
+
+    steps:
+      - name: Quelltext holen
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Abhaengigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install "pyinstaller>=6.10"
+
+      - name: Symbol bereitstellen
+        run: |
+          # Ohne die Bildquelle startet das Programm, hat aber das
+          # allgemeine Symbol von Python statt dem eigenen.
+          if [ -f logo.png ]; then
+            mkdir -p build
+            cp logo.png build/logo.png
+          else
+            echo "Keine logo.png im Projekt, es wird ohne Symbol gebaut."
+          fi
+
+      - name: Programm bauen
+        run: python scripts/app_bauen.py
+
+      - name: Ergebnis pruefen
+        run: |
+          test -d dist/Faktur.app
+          test -f dist/Faktur.app/Contents/MacOS/Faktur
+          # Ohne die Datei startet das Programm nicht. Der Bauvorgang
+          # meldet das nicht, deshalb wird hier nachgesehen.
+          find dist/Faktur.app -name app.tcss | grep -q .
+          echo "Fertig: $(du -sh dist/Faktur.app | cut -f1)"
+
+      - name: Als ZIP bereitstellen
+        # ditto, nicht zip: ein normales Zip zerlegt die Rechte und die
+        # Symlinks im Bundle. Danach startet das Programm nicht mehr.
+        run: |
+          ditto -c -k --keepParent dist/Faktur.app dist/Faktur.app.zip
+          ls -la dist/
+
+      - name: An das Release haengen
+        # gh ist auf den Laeufern schon vorhanden. Das Token kommt vom
+        # Bauvorgang selbst: es ist kein geheimer Schluessel und wird
+        # nirgends hinterlegt.
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/Faktur.app.zip \
+            --title "Faktur $GITHUB_REF_NAME" \
+            --generate-notes \
+            || gh release upload "$GITHUB_REF_NAME" dist/Faktur.app.zip --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
