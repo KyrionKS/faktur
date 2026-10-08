@@ -6,6 +6,7 @@ man erst bemerkt, wenn sie weh tun.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -114,3 +115,56 @@ def test_die_startscripts_derfen_vom_finder_geoeffnet_werden() -> None:
             "Texteditor oeffnen statt das Programm zu starten."
         )
         assert pfad.read_bytes().endswith(b"\n"), f"{name} endet ohne Zeilenumbruch"
+
+
+#: Ein Verweis in einem Textdokument: [Text](Ziel)
+VERWEIS = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
+
+
+@pytest.mark.parametrize(
+    "text", sorted(WURZEL.rglob("*.md")), ids=lambda p: str(p.relative_to(WURZEL))
+)
+def test_jeder_verweis_zeigt_auf_etwas(text: Path) -> None:
+    """Kein toter Verweis in den Dokumenten.
+
+    Auf GitHub fallen die erst auf, wenn jemand klickt. Und geklickt wird,
+    wenn man wissen will, wie man das Programm startet.
+
+    Args:
+        text: Das Dokument, das geprueft wird.
+    """
+    if any(teil in text.parts for teil in (".git", ".venv", "daten", "beispiele")):
+        return
+
+    inhalt = text.read_text(encoding="utf-8")
+
+    tot = []
+    for ziel in VERWEIS.findall(inhalt):
+        if ziel.startswith(("http://", "https://", "#", "mailto:")):
+            continue
+        # Anker am Ende abtrennen: [Text](datei.md#abschnitt)
+        pfad = ziel.split("#", 1)[0]
+        if not pfad:
+            continue
+        if not (text.parent / pfad).exists():
+            tot.append(ziel)
+
+    assert tot == [], (
+        f"{text.relative_to(WURZEL)} zeigt auf nichts: {', '.join(sorted(set(tot)))}"
+    )
+
+
+def test_das_readme_bleibt_kurz() -> None:
+    """Das README ist die Seite, die jeder zuerst sieht.
+
+    Es soll sagen, was es ist und wie es startet. Alles andere gehoert nach
+    ``docs/``. Diese Grenze ist eine Entscheidung, kein Zufall, deshalb
+    steht sie hier und nicht nur in meinem Kopf.
+    """
+    zeilen = (WURZEL / "README.md").read_text(encoding="utf-8").splitlines()
+
+    ueberschreitungen = [z for z in zeilen if z.startswith("## ")]
+    assert len(ueberschreitungen) <= 4, (
+        f"Das README hat {len(ueberschreitungen)} Abschnitte. Gehoert nach docs/: "
+        f"{ueberschreitungen}"
+    )
