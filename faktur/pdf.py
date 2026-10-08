@@ -25,16 +25,77 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from faktur import betraege, einstellungen, gestaltung, texte
+from faktur import betraege, bloecke, einstellungen, gestaltung, texte
 
 #: Der Rand ringsum.
 RAND = 20 * mm
 
-#: Wie breit das kleine Logo in der Fusszeile sitzt.
-LOGO_KLEIN = 22 * mm
+#: Die Breiten, die das Logo haben kann, in Millimeter.
+LOGO_GROESSEN = {"klein": 16.0, "mittel": 22.0, "gross": 32.0}
+
+#: Die Größe, die gilt, wenn keine eingestellt oder eine unbekannte ist.
+LOGO_STANDARD = "mittel"
+
+#: Der Abstand der Logo-Oberkante von der Blattkante. Er ist fest, damit das
+#: Logo bei jeder Größe gleich weit oben steht.
+LOGO_ABSTAND = 10 * mm
 
 #: Die Breite, die für den Text bleibt.
 NUTZBREITE = A4[0] - 2 * RAND
+
+
+def logo_groesse(db: sqlite3.Connection) -> str:
+    """Liest die gewünschte Logogröße.
+
+    Args:
+        db: Die Datenbankverbindung.
+
+    Returns:
+        ``klein``, ``mittel`` oder ``gross``.
+    """
+    wert = einstellungen.hole(db, "logo_groesse", LOGO_STANDARD).strip().lower()
+    return wert if wert in LOGO_GROESSEN else LOGO_STANDARD
+
+
+def logo_breite(db: sqlite3.Connection | None = None) -> float:
+    """Nennt die Breite des Logos in Millimeter.
+
+    Args:
+        db: Die Datenbankverbindung, oder ``None`` für die Standardgröße.
+
+    Returns:
+        Die Breite in Millimetern.
+    """
+    if db is None:
+        return LOGO_GROESSEN[LOGO_STANDARD]
+    return LOGO_GROESSEN[logo_groesse(db)]
+
+
+def bildverhaeltnis(pfad: Path) -> float | None:
+    """Liest das echte Seitenverhältnis einer Bilddatei.
+
+    Ohne das echte Verhältnis sähe ein breites Logo anders aus als ein
+    hohes, obwohl beide gleich breit gesetzt sind.
+
+    Args:
+        pfad: Die Bilddatei.
+
+    Returns:
+        Breite geteilt durch Höhe, oder ``None``, wenn die Datei nicht
+        lesbar ist.
+    """
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(pfad) as bild:
+            breite, hoehe = bild.size
+    except (OSError, UnidentifiedImageError, ValueError):
+        return None
+
+    if not breite or not hoehe:
+        return None
+
+    return breite / hoehe
 
 
 class Linie(Flowable):
@@ -142,35 +203,79 @@ def kopfzeile(
     teile: list[Flowable] = []
 
     # --- Firmenzeile links, Logo rechts, ohne Rahmen nebeneinander
-    firma_zeile: list[Paragraph] = [
-        Paragraph(
-            sauber(einstellungen.hole(db, "firma", "New Air Media Group")),
-            stil["firma"],
-        )
-    ]
-    zusatz = einstellungen.hole(db, "zusatz")
-    anschrift = einstellungen.hole(db, "strasse")
-    stadt = " ".join(
-        teil
-        for teil in (einstellungen.hole(db, "plz"), einstellungen.hole(db, "ort"))
-        if teil
-    )
-    kontakt = einstellungen.hole(db, "email")
-    telefon = einstellungen.hole(db, "telefon")
-    if telefon:
-        kontakt = f"{kontakt} · {telefon}" if kontakt else telefon
+    art = dokument["art"]
 
-    for stueck in (zusatz, anschrift, stadt, kontakt):
+    def gehoert(name: str) -> bool:
+        """Sagt, ob ein Block auf dieses Dokument gehört.
+
+        Args:
+            name: Der Name des Blocks.
+
+        Returns:
+            ``True``, wenn er erscheinen soll.
+        """
+        return bloecke.gehoert(db, art, name)
+
+    firma_zeile: list[Paragraph] = []
+
+    if gehoert("firma"):
+        firma_zeile.append(
+            Paragraph(
+                sauber(einstellungen.hole(db, "firma", "New Air Media Group")),
+                stil["firma"],
+            )
+        )
+
+    # Telefon und E-Mail stehen heute in einer gemeinsamen Zeile. Das bleibt
+    # so, solange beide an sind. Schaltet man nur eines ab, bleibt das
+    # andere für sich allein stehen — eine Zeile mit einem einzigen Eintrag
+    # sieht nach einem Fehler aus.
+    kontakt: list[str] = []
+    if gehoert("email"):
+        email = einstellungen.hole(db, "email")
+        if email:
+            kontakt.append(email)
+    if gehoert("telefon"):
+        telefon = einstellungen.hole(db, "telefon")
+        if telefon:
+            kontakt.append(telefon)
+
+    rest: list[tuple[str, str]] = []
+    if gehoert("zusatz"):
+        rest.append(einstellungen.hole(db, "zusatz"))
+    if gehoert("anschrift"):
+        rest.append(einstellungen.hole(db, "strasse"))
+        rest.append(
+            " ".join(
+                teil
+                for teil in (
+                    einstellungen.hole(db, "plz"),
+                    einstellungen.hole(db, "ort"),
+                )
+                if teil
+            )
+        )
+    if kontakt:
+        rest.append(" · ".join(kontakt))
+    if gehoert("webseite"):
+        rest.append(einstellungen.hole(db, "webseite"))
+
+    for stueck in rest:
         if stueck:
             firma_zeile.append(Paragraph(sauber(stueck), stil["klein"]))
 
     # Rechts bleibt Platz für das Logo. Es setzt der Seitenkopf auf jede
-    # Seite, deshalb hier nicht noch einmal.
+    # Seite, deshalb hier nicht noch einmal. Ohne Logo gehört die ganze
+    # Breite der Firmenzeile: Ein leerer rechter Rand, den niemand
+    # bestellt hat, sieht nach einem Fehler aus.
+    with_logo = gehoert("logo")
+    spalten = [NUTZBREITE * 0.62, NUTZBREITE * 0.38] if with_logo else [NUTZBREITE]
+
     kopf = Table(
-        [[firma_zeile, ""]],
-        colWidths=[NUTZBREITE * 0.62, NUTZBREITE * 0.38],
+        [[firma_zeile, ""]] if with_logo else [firma_zeile],
+        colWidths=spalten,
     )
-    kopf.setStyle(_ohne_kasten([NUTZBREITE * 0.62, NUTZBREITE * 0.38]))
+    kopf.setStyle(_ohne_kasten(spalten))
     teile += [kopf, Spacer(1, 5), Linie(NUTZBREITE, gestaltung.AKZENT), Spacer(1, 16)]
 
     # --- Empfängeranschrift
@@ -396,42 +501,67 @@ def abschluss(
     """
     teile: list[Flowable] = [Spacer(1, 20)]
 
-    if dokument["art"] != "angebot":
-        hinweise: list[str] = ["Zahlbar ohne Abzug."]
-        if dokument["faellig"]:
-            hinweise.insert(0, f"Zahlbar bis {sauber(dokument['faellig'])}.")
-        teile.append(Paragraph(" ".join(hinweise), stil["klein"]))
+    art = dokument["art"]
 
-        bank = [
-            f"{k}: {sauber(v)}"
-            for k, v in (
-                ("Bank", einstellungen.hole(db, "bank")),
-                ("IBAN", einstellungen.hole(db, "iban")),
-                ("BIC", einstellungen.hole(db, "bic")),
-            )
-            if v
-        ]
-        if bank:
-            teile += [Spacer(1, 10), Paragraph("<br/>".join(bank), stil["klein"])]
+    def gehoert(name: str) -> bool:
+        """Sagt, ob ein Block auf dieses Dokument gehört.
 
-        # Die Steuernummer steht nur auf der Rechnung. Auf einem Angebot
-        # wäre sie irreführend.
-        steuer = einstellungen.hole(db, "steuernummer")
-        if steuer:
-            teile += [
-                Spacer(1, 8),
-                Paragraph(sauber(f"Steuernummer {steuer}"), stil["klein"]),
+        Args:
+            name: Der Name des Blocks.
+
+        Returns:
+            ``True``, wenn er erscheinen soll.
+        """
+        return bloecke.gehoert(db, art, name)
+
+    # Bankverbindung, Steuernummer und Zahlhinweis standen früher fest auf
+    # „nur Rechnung". Jetzt entscheidet die Auswahl, und die Voreinstellung
+    # sagt dasselbe wie vorher.
+    if art != "angebot":
+        if gehoert("zahlbar"):
+            hinweise: list[str] = ["Zahlbar ohne Abzug."]
+            if dokument["faellig"]:
+                hinweise.insert(0, f"Zahlbar bis {sauber(dokument['faellig'])}.")
+            teile.append(Paragraph(" ".join(hinweise), stil["klein"]))
+
+        if gehoert("bank"):
+            bank = [
+                f"{k}: {sauber(v)}"
+                for k, v in (
+                    ("Bank", einstellungen.hole(db, "bank")),
+                    ("IBAN", einstellungen.hole(db, "iban")),
+                    ("BIC", einstellungen.hole(db, "bic")),
+                )
+                if v
             ]
+            if bank:
+                teile += [
+                    Spacer(1, 10),
+                    Paragraph("<br/>".join(bank), stil["klein"]),
+                ]
+
+        # Die Steuernummer stand früher nur auf der Rechnung. Auf einem
+        # Angebot wäre sie irreführend.
+        if gehoert("steuer"):
+            steuer = einstellungen.hole(db, "steuernummer")
+            if steuer:
+                teile += [
+                    Spacer(1, 8),
+                    Paragraph(sauber(f"Steuernummer {steuer}"), stil["klein"]),
+                ]
 
     teile.append(Spacer(1, 16))
 
     # Die Grussformel steht schon im Brieftext, wenn der Baustein sie
-    # enthält. Zweimal auf einem Brief sieht nach einem Fehler aus.
+    # enthält. Zweimal auf einem Brief sieht nach einem Fehler aus. Sie
+    # bleibt auch dann stehen, wenn der Inhaber abgeschaltet ist: ein
+    # Brief ohne Abschluss sieht schlimmer aus als einer mit einem leeren.
     if not _brief_hat_gruss(db, dokument):
         teile.append(Paragraph("Freundliche Grüße", stil["absatz"]))
-        inhaber = einstellungen.hole(db, "inhaber")
-        if inhaber:
-            teile.append(Paragraph(sauber(inhaber), stil["absatz"]))
+        if gehoert("inhaber"):
+            inhaber = einstellungen.hole(db, "inhaber")
+            if inhaber:
+                teile.append(Paragraph(sauber(inhaber), stil["absatz"]))
 
     return teile
 
@@ -450,19 +580,29 @@ def _brief_hat_gruss(db: sqlite3.Connection, dokument: sqlite3.Row) -> bool:
     return "freundliche gr" in vorlage.lower()
 
 
-def deko(db: sqlite3.Connection) -> Callable[[object, object], None]:
+def deko(db: sqlite3.Connection, art: str) -> Callable[[object, object], None]:
     """Macht Kopf- und Fusszeile für jede Seite.
 
     Args:
         db: Die Datenbankverbindung.
+        art: ``angebot`` oder ``rechnung``. Die Fußzeile kann je nach Art
+            anders aussehen, deshalb muss sie die Art kennen.
 
     Returns:
         Eine Funktion, die reportlab auf jeder Seite aufruft.
     """
     firma = einstellungen.hole(db, "firma", "New Air Media Group")
-    logopfad = einstellungen.logo_pfad(db)
+    logopfad = einstellungen.logo_pfad(db) if bloecke.gehoert(db, art, "logo") else None
     breite, hoehe = A4
     grau = colors.Color(*gestaltung.hex_rgb(gestaltung.SEKUNDAER))
+    verhaeltnis = bildverhaeltnis(logopfad) if logopfad else None
+    breite_logo = logo_breite(db) * mm
+    # Die Fußzeile wird auf die Leinwand geschrieben und hat deshalb keinen
+    # Absatzstil. Sie braucht die Größe des Kleinststils, aber mit dem
+    # Faktor der gewählten Textgröße — sonst schrumpft sie bei „groß".
+    schrift = gestaltung.groesse_von(
+        "klein", gestaltung.groesse_faktor(text_groesse(db))
+    )
 
     def zeichnen(leinwand: object, _dokument: object) -> None:
         """Schreibt Logo und Fusszeile auf die Seite.
@@ -473,26 +613,49 @@ def deko(db: sqlite3.Connection) -> Callable[[object, object], None]:
         """
         leinwand.saveState()
 
-        if logopfad:
+        if logopfad and verhaeltnis:
+            # Die Höhe folgt dem echten Seitenverhältnis der Datei. Vorher
+            # stand hier ein geratener Wert, der für das eigene Logo nicht
+            # stimmte: Es saß mehrere Millimeter zu tief, und bei einer
+            # größeren Variante wäre der Fehler mitgewachsen.
+            hoehe_logo = breite_logo / verhaeltnis
             leinwand.drawImage(
                 str(logopfad),
-                breite - LOGO_KLEIN - RAND,
-                hoehe - LOGO_KLEIN * 0.35 - 10 * mm,
-                width=LOGO_KLEIN,
+                breite - breite_logo - RAND,
+                hoehe - hoehe_logo - LOGO_ABSTAND,
+                width=breite_logo,
+                height=hoehe_logo,
                 preserveAspectRatio=True,
                 anchor="sw",
                 mask="auto",
             )
 
-        leinwand.setFont(gestaltung.SCHRIFT, 7.5)
+        leinwand.setFont(gestaltung.SCHRIFT, schrift)
         leinwand.setFillColor(grau)
-        leinwand.drawString(RAND, 12 * mm, firma)
-        leinwand.drawRightString(
-            breite - RAND, 12 * mm, f"Seite {leinwand.getPageNumber()}"
-        )
+
+        if bloecke.gehoert(db, art, "firmenzeile"):
+            leinwand.drawString(RAND, 12 * mm, firma)
+        if bloecke.gehoert(db, art, "seitenzahl"):
+            leinwand.drawRightString(
+                breite - RAND, 12 * mm, f"Seite {leinwand.getPageNumber()}"
+            )
+
         leinwand.restoreState()
 
     return zeichnen
+
+
+def text_groesse(db: sqlite3.Connection) -> str:
+    """Liest die gewünschte Textgröße.
+
+    Args:
+        db: Die Datenbankverbindung.
+
+    Returns:
+        ``klein``, ``normal`` oder ``gross``.
+    """
+    wert = einstellungen.hole(db, "text_groesse", "normal").strip().lower()
+    return wert if wert in gestaltung.GRUESSEN else "normal"
 
 
 def erzeugen(db: sqlite3.Connection, dokument: sqlite3.Row, ziel: Path) -> Path:
@@ -506,7 +669,7 @@ def erzeugen(db: sqlite3.Connection, dokument: sqlite3.Row, ziel: Path) -> Path:
     Returns:
         Der Pfad der erzeugten Datei.
     """
-    stil = gestaltung.stile()
+    stil = gestaltung.stile(gestaltung.groesse_faktor(text_groesse(db)))
     ziel.parent.mkdir(parents=True, exist_ok=True)
 
     doc = SimpleDocTemplate(
@@ -528,6 +691,6 @@ def erzeugen(db: sqlite3.Connection, dokument: sqlite3.Row, ziel: Path) -> Path:
     inhalt += tabelle(db, dokument, stil)
     inhalt += abschluss(db, dokument, stil)
 
-    rahmen = deko(db)
+    rahmen = deko(db, dokument["art"])
     doc.build(inhalt, onFirstPage=rahmen, onLaterPages=rahmen)
     return ziel

@@ -180,12 +180,17 @@ def logo_pfad(db: sqlite3.Connection) -> Path | None:
     return None
 
 
-def logo_uebernehmen(db: sqlite3.Connection, quelle: Path) -> Path:
+def logo_uebernehmen(
+    db: sqlite3.Connection, quelle: Path, ziel_ordner: Path | None = None
+) -> Path:
     """Kopiert ein Logo in den Datenordner und merkt sich den Pfad.
 
     Args:
         db: Die Datenbankverbindung.
         quelle: Die Bilddatei.
+        ziel_ordner: Wohin kopiert wird. Ohne Angabe der echte
+            Datenordner. Die Tests geben ein temporäres Verzeichnis an,
+            damit sie nicht das Logo des Benutzers überschreiben.
 
     Returns:
         Der Pfad im Datenordner.
@@ -196,8 +201,9 @@ def logo_uebernehmen(db: sqlite3.Connection, quelle: Path) -> Path:
     if not quelle.is_file():
         raise FileNotFoundError(f"Keine Datei gefunden: {quelle}")
 
-    DATENORDNER.mkdir(parents=True, exist_ok=True)
-    ziel = DATENORDNER / "logo.png"
+    ordner = ziel_ordner if ziel_ordner is not None else DATENORDNER
+    ordner.mkdir(parents=True, exist_ok=True)
+    ziel = ordner / "logo.png"
     shutil.copyfile(quelle, ziel)
     speichere(db, "logo_pfad", str(ziel))
     return ziel
