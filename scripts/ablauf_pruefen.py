@@ -169,7 +169,7 @@ async def durchlauf() -> int:
 
         # --- Dokumente und PDF
         await tippen("escape", "escape", "escape")
-        await tippen("5")
+        await tippen("6")
         pruefe("Dokumentenliste", "Angebot")
         await tippen("enter")
         pruefe("PDF geschrieben", "Geschrieben")
@@ -191,7 +191,7 @@ async def durchlauf() -> int:
         pruefe("Rechnung gespeichert", "Gespeichert")
 
         await tippen("escape", "escape")
-        await tippen("5")
+        await tippen("6")
         pruefe("Rechnung in der Liste", "Rechnung")
 
         # --- Preisliste
@@ -201,7 +201,7 @@ async def durchlauf() -> int:
 
         # --- Stammdaten
         await tippen("escape")
-        await tippen("6")
+        await tippen("7")
         pruefe("Stammdaten", "Firma und Bank")
 
         # Der Brieftext ist mehrzeilig. Das war der Grund für den eigenen
@@ -231,7 +231,7 @@ async def durchlauf() -> int:
         # Grösse ändern und einen Block abschalten. Beides wird sofort in
         # die Datenbank geschrieben, das prüft der Lauf danach direkt.
         await tippen("escape")
-        await tippen("6")
+        await tippen("7")
         pruefe("Stammdaten", "Firma und Bank")
         await tippen("6")
         pruefe("Aussehen", "Logogröße")
@@ -272,6 +272,19 @@ async def durchlauf() -> int:
         await tippen("home")
         await tippen("right")
         pruefe("auf der Rechnung", "Bank, IBAN, BIC")
+
+        # --- Offene Forderungen
+        # Eine Rechnung anlegen, sie muss in der Liste stehen und wieder
+        # verschwinden, wenn sie als bezahlt vermerkt ist.
+        await tippen("escape")
+        await tippen("escape")
+        await tippen("escape")
+        await tippen("5")
+        pruefe("Offene Forderungen", "Rechnung")
+        pruefe("Summe", "Offen:")
+
+        await tippen("b")
+        pruefe("nach dem Markieren leer", "0 Rechnungen")
 
         await tippen("escape")
         await tippen("escape")
