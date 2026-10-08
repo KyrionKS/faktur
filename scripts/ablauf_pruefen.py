@@ -242,9 +242,9 @@ async def durchlauf() -> int:
         await tippen("left")
         pruefe("Logogröße kleiner", "klein")
 
-        # Von der Logogröße bis zur Anschrift sind es fünf Plätze:
-        # Schriftgröße, Firmenname, Zusatz, Anschrift.
-        for _ in range(4):
+        # Von der Logogröße bis zur Anschrift sind es sechs Plätze:
+        # Schriftgröße, Nummer, Firmenname, Zusatz, Anschrift.
+        for _ in range(5):
             await tippen("down")
         await tippen("space")
         pruefe("Anschrift abgeschaltet", "○")

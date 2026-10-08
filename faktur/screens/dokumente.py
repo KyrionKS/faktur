@@ -15,6 +15,7 @@ from textual.widgets import Static
 
 from faktur import betraege, dateien, db, pdf
 from faktur.basis import BasisScreen
+from faktur.suchen import Suchfeld, SuchZeile, filtern
 from faktur.widgets import Auswahl, Formular, Tabelle
 
 #: Die Felder des Dokumentkopfs.
@@ -78,6 +79,7 @@ class DokumentenScreen(BasisScreen):
         Binding("a", "angebot", "Neues Angebot", show=True),
         Binding("r", "rechnung", "Abrechnen", show=True),
         Binding("enter", "pdf", "PDF neu schreiben", show=True),
+        Binding("suche", "suchen", "Suchen", show=True),
     ]
 
     def __init__(
@@ -93,6 +95,8 @@ class DokumentenScreen(BasisScreen):
         super().__init__(verbindung)
         self.nur_drucken = nur_drucken
         self.dokumente = dateien.dokumente(verbindung)
+        self._suche = ""
+        self.sichtbar: list = list(self.dokumente)
 
     def inhalt(self) -> ComposeResult:
         """Baut die Liste.
@@ -100,14 +104,8 @@ class DokumentenScreen(BasisScreen):
         Yields:
             Die Kindelemente.
         """
-        if not self.nur_drucken:
-            yield Static(
-                f"{len(self.dokumente)} Dokumente. Enter schreibt die PDF "
-                "neu, F2 zeigt das Dokument.",
-                classes="hinweis",
-            )
-        else:
-            yield Static("Enter schreibt die PDF neu. esc zurück.", classes="hinweis")
+        yield Suchfeld(self._suche_geaendert)
+        yield SuchZeile(id="hinweis")
 
         yield Tabelle(
             [
@@ -117,16 +115,7 @@ class DokumentenScreen(BasisScreen):
                 ("Datum", 12),
                 ("Betrag", 14),
             ],
-            [
-                [
-                    "Angebot" if d["art"] == "angebot" else "Rechnung",
-                    d["nummer"],
-                    d["firma"],
-                    d["datum"],
-                    betraege.euro(dateien.summe_von(self.db, d["id"])),
-                ]
-                for d in self.dokumente
-            ],
+            [self._zeile(d) for d in self.sichtbar],
         )
 
     def start_fokus(self) -> None:
@@ -137,22 +126,77 @@ class DokumentenScreen(BasisScreen):
         """Liest die Liste neu ein, wenn man von einem Formular zurückkommt."""
         self.aktualisieren()
 
+    def _zeile(self, dokument: object) -> list[str]:
+        """Baut die Textzeile eines Dokuments.
+
+        Args:
+            dokument: Das Dokument.
+
+        Returns:
+            Die Zellen der Tabellenzeile.
+        """
+        return [
+            "Angebot" if dokument["art"] == "angebot" else "Rechnung",
+            dokument["nummer"],
+            dokument["firma"],
+            dokument["datum"],
+            betraege.euro(dateien.summe_von(self.db, dokument["id"])),
+        ]
+
     def aktualisieren(self) -> None:
         """Holt die Dokumente aus der Datenbank und zeichnet neu."""
         self.dokumente = dateien.dokumente(self.db)
-        tabelle = self.query_one(Tabelle)
-        tabelle.zeilen = [
-            [
-                "Angebot" if d["art"] == "angebot" else "Rechnung",
-                d["nummer"],
-                d["firma"],
-                d["datum"],
-                betraege.euro(dateien.summe_von(self.db, d["id"])),
-            ]
-            for d in self.dokumente
+        self._suche = ""
+        self._zeichne()
+
+    def _suche_geaendert(self, begriff: str) -> None:
+        """Sucht weiter, während getippt wird.
+
+        Args:
+            begriff: Der Text im Suchfeld.
+        """
+        self._suche = begriff
+        self._zeichne()
+
+    def _zeichne(self) -> None:
+        """Zeichnet die Liste mit dem, was zur Suche passt.
+
+        Wichtig ist hier ``sichtbar``: Diese Liste wird auch zum Markieren
+        benutzt, etwa um ein Angebot in eine Rechnung umzuwandeln oder etwas
+        zu loeschen. Der Index der Tabelle muss sich deshalb auf dieselbe
+        Liste beziehen, die gezeichnet wird — sonst wuerde man beim Filtern
+        das falsche Dokument nehmen.
+
+        Gefiltert wird ueber die Nummer, nicht ueber den ganzen Zeilentext:
+        Die Nummer ist eindeutig, und ein Vergleich nach Zeilenwerten waere
+        zerbrechlich.
+        """
+        zeilen = [self._zeile(d) for d in self.dokumente]
+        passend = filtern(zeilen, self._suche)
+        nummern = {zeile[1] for zeile in passend}
+
+        self.sichtbar = [
+            dokument
+            for dokument, zeile in zip(self.dokumente, zeilen, strict=True)
+            if zeile[1] in nummern
         ]
+
+        tabelle = self.query_one(Tabelle)
+        tabelle.zeilen = [zeile for zeile in zeilen if zeile[1] in nummern]
         tabelle.index = min(tabelle.index, max(0, len(tabelle.zeilen) - 1))
         tabelle.refresh()
+
+        self.query_one(SuchZeile).zeige(
+            len(nummern), len(zeilen), self._suche, "Dokumente", "Dokument"
+        )
+
+    def action_suchen(self) -> None:
+        """Legt den Cursor ins Suchfeld.
+
+        Args:
+            None
+        """
+        self.query_one(Suchfeld).focus()
 
     def action_angebot(self) -> None:
         """Beginnt ein neues Angebot."""
@@ -169,8 +213,8 @@ class DokumentenScreen(BasisScreen):
         if (
             tabelle
             and tabelle.first()
-            and tabelle.first().index < len(self.dokumente)
-            and self.dokumente[tabelle.first().index]["art"] == "angebot"
+            and tabelle.first().index < len(self.sichtbar)
+            and self.sichtbar[tabelle.first().index]["art"] == "angebot"
         ):
             self.angebot_zu_rechnung()
             return
@@ -186,10 +230,10 @@ class DokumentenScreen(BasisScreen):
         Geht ohne Auswahl nicht, weil es dann nichts zu schreiben gäbe.
         """
         tabelle = self.query_one(Tabelle)
-        if tabelle.index >= len(self.dokumente):
+        if tabelle.index >= len(self.sichtbar):
             return
 
-        dokument = self.dokumente[tabelle.index]
+        dokument = self.sichtbar[tabelle.index]
         voll = dateien.dokument_holen(self.db, dokument["id"])
         if voll is None:
             self.meldung("Das Dokument gibt es nicht mehr.", gut=False)
@@ -215,10 +259,10 @@ class DokumentenScreen(BasisScreen):
         stehen in der Kontrolle.
         """
         tabelle = self.query_one(Tabelle)
-        if tabelle.index >= len(self.dokumente):
+        if tabelle.index >= len(self.sichtbar):
             return
 
-        dokument = self.dokumente[tabelle.index]
+        dokument = self.sichtbar[tabelle.index]
         if dokument["art"] != "angebot":
             self.meldung(
                 "Nur aus einem Angebot wird eine Rechnung. Markiert ist eine Rechnung.",
@@ -249,10 +293,10 @@ class DokumentenScreen(BasisScreen):
         Args:
             event: Die Nachricht der Tabelle.
         """
-        if event.zeile < len(self.dokumente):
-            self._zu_loeschen = self.dokumente[event.zeile]["id"]
+        if event.zeile < len(self.sichtbar):
+            self._zu_loeschen = self.sichtbar[event.zeile]["id"]
             self.bestaetigen(
-                f"Dokument {self.dokumente[event.zeile]['nummer']} löschen? "
+                f"Dokument {self.sichtbar[event.zeile]['nummer']} löschen? "
                 "Die PDF bleibt im Ordner."
             )
 
