@@ -227,6 +227,52 @@ async def durchlauf() -> int:
             nonlocal_fehler[0] += 1
             print("  FEHLT  Absätze unbeschädigt gespeichert")
 
+        # --- Aussehen der PDF
+        # Grösse ändern und einen Block abschalten. Beides wird sofort in
+        # die Datenbank geschrieben, das prüft der Lauf danach direkt.
+        await tippen("escape")
+        await tippen("6")
+        pruefe("Stammdaten", "Firma und Bank")
+        await tippen("6")
+        pruefe("Aussehen", "Logogröße")
+        pruefe("Absender", "Firmenname")
+        pruefe("Fußzeile", "Seitenzahl")
+
+        await tippen("down")
+        await tippen("left")
+        pruefe("Logogröße kleiner", "klein")
+
+        # Von der Logogröße bis zur Anschrift sind es fünf Plätze:
+        # Schriftgröße, Firmenname, Zusatz, Anschrift.
+        for _ in range(4):
+            await tippen("down")
+        await tippen("space")
+        pruefe("Anschrift abgeschaltet", "○")
+
+        gespeichert = app.db.execute(
+            "SELECT wert FROM einstellungen WHERE schluessel = 'logo_groesse'"
+        ).fetchone()
+        if gespeichert and gespeichert["wert"] == "klein":
+            print("  ok     Logogröße gespeichert")
+        else:
+            nonlocal_fehler[0] += 1
+            print("  FEHLT  Logogröße gespeichert")
+
+        ausgabe = app.db.execute(
+            "SELECT wert FROM einstellungen WHERE schluessel = 'ausgabe_angebot'"
+        ).fetchone()
+        if ausgabe and "anschrift" not in ausgabe["wert"].split(","):
+            print("  ok     abgeschalteter Block gespeichert")
+        else:
+            nonlocal_fehler[0] += 1
+            print("  FEHLT  abgeschalteter Block gespeichert")
+
+        # Auf die Rechnung wechseln. Dort muss die Bankverbindung stehen,
+        # auf dem Angebot nicht.
+        await tippen("home")
+        await tippen("right")
+        pruefe("auf der Rechnung", "Bank, IBAN, BIC")
+
         await tippen("escape")
         await tippen("escape")
         pruefe("zurueck im Menue", "Beenden")

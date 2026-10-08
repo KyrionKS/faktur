@@ -8,6 +8,7 @@ Bild ruhig, wenn man sich mit den Pfeiltasten bewegt, und nichts läuft
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -85,18 +86,33 @@ class MenueScreen(BasisScreen):
 
     def ordner_oeffnen(self) -> None:
         """Öffnet den Ordner mit den PDF im Dateimanager des Systems."""
-        ordner = db.ausgabeordner()
-        try:
-            if sys.platform == "darwin":
-                subprocess.run(["open", str(ordner)], check=False)
-            elif sys.platform.startswith("win"):
-                import os
+        fehler = zeige_ausgabeordner()
+        if fehler:
+            self.meldung(fehler, gut=False)
 
-                os.startfile(str(ordner))  # type: ignore[attr-defined]
-            else:
-                subprocess.run(["xdg-open", str(ordner)], check=False)
-        except OSError:
-            self.meldung(f"Der Ordner liegt hier: {ordner}", gut=False)
+
+def zeige_ausgabeordner() -> str | None:
+    """Öffnet den Ordner mit den PDF im Dateimanager des Systems.
+
+    Steht als Funktion und nicht als Methode, weil auch der Bildschirm
+    *Aussehen* den Ordner öffnet. Der Aufruf von dort kommt absichtlich
+    spät: :mod:`faktur.app` lädt die Bildschirme, und ein früher Import
+    liefe im Kreis.
+
+    Returns:
+        Der Text für eine Meldung, oder ``None``, wenn es geklappt hat.
+    """
+    ordner = db.ausgabeordner()
+    try:
+        if sys.platform == "darwin":
+            subprocess.run(["open", str(ordner)], check=False)
+        elif sys.platform.startswith("win"):
+            os.startfile(str(ordner))  # type: ignore[attr-defined]
+        else:
+            subprocess.run(["xdg-open", str(ordner)], check=False)
+    except OSError:
+        return f"Der Ordner liegt hier: {ordner}"
+    return None
 
 
 class FakturApp(App[None]):

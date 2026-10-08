@@ -164,3 +164,69 @@ Zwischensumme rechnen, was bei einem Rabatt auf einen Rabatt unangenehm wird.
 Preise enthalten keine Steuerausweisung. Die App ist als Werkzeug für
 Kleinunternehmer gebaut; wer umsatzsteuerpflichtig ist, trägt den Betrag
 inklusive Steuer als Endpreis ein.
+
+## Aussehen der PDF
+
+Unter `6` → `6`. Ein Bildschirm mit drei Teilen:
+
+```
+ ▶  Dokumentart         ◀ Rechnung ▸
+    Logogröße          ◀ mittel ▸
+    Schriftgröße        ◀ normal ▸
+
+    Absender
+      Firmenname        ●
+      Zusatz zur Firma   ●
+      Anschrift          ●
+      Telefon            ●
+      E-Mail             ●
+      Webseite           ○
+      Logo               ●
+    Abschluss
+      Zahlbar bis        ●
+      Bank, IBAN, BIC    ●
+      Steuernummer       ●
+      Inhaber            ●
+    Fußzeile
+      Firmenzeile        ●
+      Seitenzahl         ●
+```
+
+| Taste | Wirkung |
+|---|---|
+| `↑` `↓` | bewegen |
+| `←` `→` | bei einer Größe den Wert ändern, oben die Dokumentart wechseln |
+| `␣` oder `⏎` | einen Baustein an- und abschalten |
+| `F2` | das neueste Dokument neu schreiben und den Ordner öffnen |
+| `esc` | zurück |
+
+**Die Größen gelten für beide Dokumentarten.** Sie stecken in derselben
+Schrift, und eine kleinere Schrift auf dem Angebot und eine größere auf der
+Rechnung sähe nach einem Fehler aus.
+
+**Was auf einem Dokument steht, ist je Art getrennt.** Auf einem Angebot
+gehört keine Bankverbindung hin, auf einer Rechnung ist sie das Wichtigste
+überhaupt. Deshalb oben umschalten und unten einstellen.
+
+Am Anfang steht alles an, wie es bisher war — mit einer Ausnahme: die
+**Webseite** war im Formular und kam trotzdem nie auf die PDF. Sie ist jetzt
+die einzige Zeile, die von Anfang an aus ist. Wer sie braucht, schaltet sie
+ein.
+
+**Ohne Logo** bekommt die Firmenzeile die volle Breite. Ein leerer rechter
+Rand, den niemand bestellt hat, sieht nach einem Fehler aus.
+
+Zwei Dinge ändern sich nicht:
+
+**Der Abschluss bleibt.** Wird der Inhaber abgeschaltet, bleibt
+*Freundliche Grüße* stehen. Ein Brief ohne Abschluss sieht schlimmer aus als
+einer mit einem leeren.
+
+**Angebot und Rechnung haben die Bankverbindung nicht gemeinsam.** Auf dem
+Angebot steht sie nicht, das war früher fest im Programm und ist es hier
+weiterhin.
+
+**Wird der Text größer, kann ein Angebot auf zwei Seiten umbrechen.** Das ist
+keine Fehlfunktion, aber gut zu wissen.
+
+

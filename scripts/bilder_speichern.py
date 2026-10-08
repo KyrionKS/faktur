@@ -216,6 +216,8 @@ FAELLE = (
     ("06_dokumente", ["5"], _mit_angebot),
     ("07_umwandlung", ["5", "r"], _mit_angebot),
     ("08_positionen", ["1", "enter"], _mit_positionen),
+    ("09_aussehen", ["6", "6"], None),
+    ("10_aussehen_rechnung", ["6", "6", "home", "right"], None),
 )
 
 
