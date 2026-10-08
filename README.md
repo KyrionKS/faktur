@@ -32,6 +32,8 @@ Es braucht Python ab 3.11 und sonst nichts.
 - PDF in einer Akzentfarbe, dünne Linien, viel Weißraum
 - Größen und Bausteine der PDF selbst einstellen, getrennt für Angebot
   und Rechnung
+- offene Forderungen sehen und abhaken, suchen auf jeder Liste
+- eine Kopie vom ganzen Bestand auf einen Tastendruck
 
 ## Mehr
 
@@ -50,4 +52,5 @@ Für die Arbeit daran:
 .venv/bin/python -m ruff check .      # Fehlerprüfung
 .venv/bin/python -m ruff format .     # Formatierung
 ```
+
 

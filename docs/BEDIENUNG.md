@@ -230,3 +230,63 @@ weiterhin.
 keine Fehlfunktion, aber gut zu wissen.
 
 
+
+## Offene Forderungen
+
+Punkt `5` im Hauptmenü. Steht dort, wie viele Rechnungen offen sind und
+wie viel Geld darauf wartet.
+
+| Taste | Wirkung |
+|---|---|
+| `suche` | im Suchfeld nach Kunde, Nummer oder Datum suchen |
+| `b` oder `␣` | die markierte Rechnung als bezahlt vermerken |
+| `esc` | zurück |
+
+Eine Rechnung gilt als offen, bis jemand etwas einträgt. **Nicht** umgekehrt:
+Eine Rechnung, die schon beim Kunden liegt, gilt nicht als bezahlt, weil sie
+bezahlt ist — das weiß niemand. Sonst verschwände sie beim ersten Öffnen aus
+der Liste.
+
+Als **überfällig** steht eine Rechnung da, wenn das Fälligkeitsdatum
+verstrichen ist und nichts gezahlt wurde. Die Frist wird aus dem Datum des
+Dokuments gelesen, nicht aus dem laufenden Datum — eine Rechnung von 2025
+wird nicht plötzlich neu datiert.
+
+Angebote stehen nie in dieser Liste. Ein Angebot wird nicht in Rechnung
+gestellt, und ein als bezahlt markiertes Angebot wäre eine Angabe, die nicht
+stimmt. Das Programm lässt sich deshalb weigern, eines zu markieren.
+
+## Sichern
+
+Punkt `9`. Kopiert den Ordner `daten/` in einen Ordner `Sicherung` neben dem
+Programm, mit Datum und Uhrzeit im Namen.
+
+`daten/` ist der ganze Bestand: Kunden, Leistungen, jedes Angebot, jede
+Rechnung und die PDF dazu. Auf einer Platte, ohne Kopie, ist irgendwann
+alles weg — und bei einem Angebot, das schon beim Kunden liegt, gibt es kein
+Zurück: Die Nummer steht gedruckt auf einem Dokument, das niemandem mehr
+gehört.
+
+Gesichert wird **kopiert, nicht verschoben**. Der Ordner bleibt, wo er ist,
+und die Kopie ist etwas, das man jederzeit wegwerfen kann.
+
+Die zehn neuesten Sicherungen bleiben liegen. Welche als nächste anstehen,
+steht in der Liste dabei — gelöscht wird nichts ohne ausdrücklichen Wunsch.
+
+## Suchen
+
+Auf der Kunden- und auf der Dokumentenliste steht oben ein Feld.
+
+Es wird gefiltert, während man tippt. Kein Dialog, kein Enter: bei zwanzig
+Kunden will niemand einen Dialog, und bei zweihundert ist die Liste ohne
+Suchfeld unbrauchbar.
+
+Der Begriff darf mitten im Wort stehen, und Groß- und Kleinschreibung spielt
+keine Rolle. Wer `check` tippt, findet *Soundcheck*.
+
+`esc` leert das Feld und zeigt wieder alles.
+
+Auf der Dokumentenliste bleibt die markierte Zeile dieselbe: Wer einen
+Kunden sucht und dann ein Angebot in eine Rechnung umwandelt, wandelt das
+gefundene um. Gefiltert wird über die Nummer, die eindeutig ist.
+
