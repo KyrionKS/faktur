@@ -335,8 +335,8 @@ def dokument_speichern(
     Args:
         db: Die Datenbankverbindung.
         kopf: ``art``, ``nummer``, ``kunde_id``, ``datum``, ``gueltig_bis``,
-            ``faellig``, ``notiz``, ``eigener_text`` und optional
-            ``dokument_id``.
+            ``faellig``, ``notiz``, ``eigener_text``, ``bezahlt_am`` und
+            optional ``dokument_id``.
         positionen_liste: Die Positionen mit ``bezeichnung``, ``menge``,
             ``einheit``, ``preis`` und optional ``leistung_id``.
 
@@ -360,21 +360,22 @@ def dokument_speichern(
         str(kopf.get("faellig", "")),
         str(kopf.get("notiz", "")),
         str(kopf.get("eigener_text", "")),
+        str(kopf.get("bezahlt_am", "")),
     )
 
     if dokument_id is None:
         cursor = db.execute(
             "INSERT INTO dokumente"
             " (art, nummer, kunde_id, datum, gueltig_bis, faellig, notiz,"
-            "  eigener_text)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "  eigener_text, bezahlt_am)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             werte,
         )
         neu = cursor.lastrowid or 0
     else:
         zuweisung = (
             "art = ?, nummer = ?, kunde_id = ?, datum = ?, gueltig_bis = ?,"
-            " faellig = ?, notiz = ?, eigener_text = ?"
+            " faellig = ?, notiz = ?, eigener_text = ?, bezahlt_am = ?"
         )
         db.execute(
             f"UPDATE dokumente SET {zuweisung} WHERE id = ?", [*werte, dokument_id]
