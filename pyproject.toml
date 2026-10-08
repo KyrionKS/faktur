@@ -1,10 +1,13 @@
 [project]
 name = "faktur"
-version = "0.3.0"
+# Die Zahl steht auch in faktur/__init__.py. Welche der beiden die
+# richtige ist, spielt keine Rolle: tests/test_version.py laesst es nicht zu,
+# dass sie auseinanderlaufen.
+version = "0.4.0"
 description = "Angebote und Rechnungen fuer die New Air Media Group"
 # Der Code kommt mit Python 3.10 durch. Hoeher angesetzt zu sein macht nur
-# die Installation auf einem Mac schwerer, weil dort ein altes Python
-# mitgeliefert wird. tests/test_repository.py haelt das fest.
+# die Installation auf einem fremden Rechner schwerer, weil dort ein altes
+# Python mitgeliefert wird. tests/test_python_version.py haelt das fest.
 requires-python = ">=3.11"
 
 [tool.ruff]
