@@ -21,7 +21,7 @@ from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.widgets import Static
 
-from faktur import bloecke, dateien, db, einstellungen, pdf
+from faktur import bloecke, dateien, db, einstellungen, nummer, pdf
 from faktur.basis import BasisScreen
 from faktur.einstellungsliste import Einstellungen, Zeile, bauen
 
@@ -29,6 +29,7 @@ from faktur.einstellungsliste import Einstellungen, Zeile, bauen
 SCHLUESSEL = {
     "Logogröße": "logo_groesse",
     "Schriftgröße": "text_groesse",
+    "Nummer": nummer.SCHLUESSEL,
 }
 
 
@@ -81,6 +82,7 @@ class AussehenScreen(BasisScreen):
             art=self.art,
             logo=pdf.logo_groesse(self.db),
             text=pdf.text_groesse(self.db),
+            nummer=nummer.gewaehlt(self.db),
             bloecke=[(b.name, b.ort, b.titel) for b in bloecke.BLOECKE],
             an=bloecke.ausgabe(self.db, self.art),
         )
@@ -138,6 +140,7 @@ class AussehenScreen(BasisScreen):
                 art=self.art,
                 logo=alt.zeilen[1].wert,
                 text=alt.zeilen[2].wert,
+                nummer=alt.zeilen[3].wert,
                 bloecke=[(b.name, b.ort, b.titel) for b in bloecke.BLOECKE],
                 an=bloecke.ausgabe(self.db, self.art),
             )

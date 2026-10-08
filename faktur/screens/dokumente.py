@@ -33,7 +33,7 @@ KOPFFELDER_RECHNUNG = [
 ]
 
 
-def dateiname(dokument: sqlite3.Row, art: str) -> str:
+def dateiname(dokument: sqlite3.Row, art: str, nummer_text: str | None = None) -> str:
     """Baut den Dateinamen einer PDF.
 
     Angebot und Rechnung liegen im selben Ordner, die Art steht deshalb im
@@ -45,12 +45,14 @@ def dateiname(dokument: sqlite3.Row, art: str) -> str:
     Args:
         dokument: Das Dokument.
         art: ``angebot`` oder ``rechnung``.
+        nummer_text: Die Nummer, wie sie im Namen stehen soll. Ohne
+            Angabe wird die gespeicherte genommen.
 
     Returns:
         Der Dateiname, ohne Ordner und ohne Endung.
     """
     kennung = "ANG" if art == "angebot" else "RE"
-    nummer = _sicher(dokument["nummer"] or str(dokument["id"]))
+    nummer = _sicher(nummer_text or dokument["nummer"] or str(dokument["id"]))
     kunde = _sicher(dokument["firma"] or "ohne Kunde")
     return f"{kennung} - {nummer} - {kunde}"
 
@@ -193,7 +195,10 @@ class DokumentenScreen(BasisScreen):
             self.meldung("Das Dokument gibt es nicht mehr.", gut=False)
             return
 
-        ziel = db.ausgabeordner() / f"{dateiname(voll, voll['art'])}.pdf"
+        ziel = (
+            db.ausgabeordner()
+            / f"{dateiname(voll, voll['art'], pdf.nummer_anzeige(voll, self.db))}.pdf"
+        )
         try:
             pdf.erzeugen(self.db, voll, ziel)
         except OSError:
@@ -901,7 +906,10 @@ class KontrolleScreen(BasisScreen):
             self.meldung("Das Dokument liess sich nicht lesen.", gut=False)
             return
 
-        ziel = db.ausgabeordner() / f"{dateiname(dokument, art)}.pdf"
+        ziel = (
+            db.ausgabeordner()
+            / f"{dateiname(dokument, art, pdf.nummer_anzeige(dokument, self.db))}.pdf"
+        )
         try:
             pdf.erzeugen(self.db, dokument, ziel)
         except OSError:

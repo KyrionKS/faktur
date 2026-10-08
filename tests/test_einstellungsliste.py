@@ -112,13 +112,15 @@ def test_alle_bloecke_aus_schaltet_sich_der_reihe_nach_aus() -> None:
 # ------------------------------------------------------------------------ bauen
 
 
-def test_die_liste_beginnt_mit_drei_zeilen_und_den_groessen() -> None:
-    """Dokumentart, Logogröße, Schriftgröße.
+def test_die_liste_beginnt_mit_vier_zeilen_und_den_groessen() -> None:
+    """Dokumentart, Logogröße, Schriftgröße, Nummer.
 
     Args:
         None
     """
-    zeilen = bauen("angebot", "mittel", "normal", BLOECKE, frozenset({"logo"}))
+    zeilen = bauen(
+        "angebot", "mittel", "normal", "vierstellig", BLOECKE, frozenset({"logo"})
+    )
 
     assert zeilen[0].art == "art"
     assert zeilen[0].titel == "Dokumentart"
@@ -131,7 +133,9 @@ def test_die_liste_beginnt_mit_drei_zeilen_und_den_groessen() -> None:
 
 def test_auf_der_liste_steht_jeder_block_einmal() -> None:
     """Dreizehn Blöcke, dreizehn Zeilen, keine doppelt."""
-    zeilen = bauen("rechnung", "mittel", "normal", BLOECKE, frozenset({"logo"}))
+    zeilen = bauen(
+        "rechnung", "mittel", "normal", "vierstellig", BLOECKE, frozenset({"logo"})
+    )
 
     namen = [zeile.block for zeile in zeilen if zeile.art == "block"]
 
@@ -143,7 +147,7 @@ def test_die_liste_zeigt_die_eingeschalteten_bloecke() -> None:
     """Was in der Datenbank an ist, steht in der Liste an."""
     an = frozenset({"firma", "logo", "bank"})
 
-    zeilen = bauen("rechnung", "mittel", "normal", BLOECKE, an)
+    zeilen = bauen("rechnung", "mittel", "normal", "vierstellig", BLOECKE, an)
 
     for zeile in zeilen:
         if zeile.art != "block":
@@ -157,7 +161,7 @@ def test_jede_blockgruppe_bekommt_genau_eine_ueberschrift() -> None:
     Args:
         None
     """
-    zeilen = bauen("angebot", "mittel", "normal", BLOECKE, frozenset())
+    zeilen = bauen("angebot", "mittel", "normal", "vierstellig", BLOECKE, frozenset())
 
     gruppen = [zeile.gruppe for zeile in zeilen if zeile.gruppe]
 
@@ -166,19 +170,32 @@ def test_jede_blockgruppe_bekommt_genau_eine_ueberschrift() -> None:
 
 def test_die_groessen_stehen_ueber_dem_ersten_block() -> None:
     """Sonst wäre der Bildschirm nicht am Stück zu sehen."""
-    zeilen = bauen("angebot", "mittel", "normal", BLOECKE, frozenset())
+    zeilen = bauen("angebot", "mittel", "normal", "vierstellig", BLOECKE, frozenset())
 
     erster_block = next(
         nummer for nummer, zeile in enumerate(zeilen) if zeile.art == "block"
     )
 
-    assert erster_block == 3
+    assert erster_block == 4
 
 
 def test_alle_werte_einer_groesse_stehen_zur_wahl() -> None:
     """Die Liste, durch die ← und → gehen."""
-    zeilen = bauen("angebot", "mittel", "normal", BLOECKE, frozenset())
+    zeilen = bauen("angebot", "mittel", "normal", "vierstellig", BLOECKE, frozenset())
 
+    assert zeilen[0].werte == ("angebot", "rechnung")
     assert zeilen[1].werte == ("klein", "mittel", "gross")
     assert zeilen[2].werte == ("klein", "normal", "gross")
-    assert zeilen[0].werte == ("angebot", "rechnung")
+    assert zeilen[3].werte == ("vierstellig", "mit_jahr")
+
+
+def test_die_nummer_steht_als_erste_vier_stellen() -> None:
+    """Vier Zeilen ohne Bausteine, damit nichts verrutscht.
+
+    Args:
+        None
+    """
+    zeilen = bauen("angebot", "mittel", "normal", "vierstellig", BLOECKE, frozenset())
+
+    assert zeilen[3].titel == "Nummer"
+    assert zeilen[3].wert == "vierstellig"

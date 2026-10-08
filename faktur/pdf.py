@@ -25,7 +25,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from faktur import betraege, bloecke, einstellungen, gestaltung, texte
+from faktur import betraege, bloecke, einstellungen, gestaltung, nummer, texte
 
 #: Der Rand ringsum.
 RAND = 20 * mm
@@ -132,6 +132,20 @@ def sauber(text: str) -> str:
     return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def nummer_anzeige(dokument: sqlite3.Row, db: sqlite3.Connection | None = None) -> str:
+    """Baut die Nummer, wie sie auf dem Dokument steht.
+
+    Args:
+        dokument: Das Dokument.
+        db: Die Datenbankverbindung. Ohne sie ist die Jahreszahl aus.
+
+    Returns:
+        ``0032`` oder, wenn gewaehlt, ``2026-0032``.
+    """
+    with_jahr = nummer.mit_jahr(db) if db is not None else False
+    return nummer.anzeige(dokument["nummer"] or "", dokument["datum"] or "", with_jahr)
+
+
 def werte_fuer(db: sqlite3.Connection, dokument: sqlite3.Row) -> dict[str, str]:
     """Sammelt alle Werte, die in den Platzhaltern stehen können.
 
@@ -153,10 +167,10 @@ def werte_fuer(db: sqlite3.Connection, dokument: sqlite3.Row) -> dict[str, str]:
         "Kunde": dokument["firma"] or "",
         "Kunde_Anrede": texte.anrede(ansprechpartner),
         "Ansprechpartner": ansprechpartner,
-        "Nummer": dokument["nummer"] or "",
-        "Datum": dokument["datum"] or "",
-        "Faellig": dokument["faellig"] or "",
-        "Gueltig_bis": dokument["gueltig_bis"] or "",
+        "Nummer": nummer_anzeige(dokument, db),
+        "Datum": betraege.datum(dokument["datum"]),
+        "Faellig": betraege.datum(dokument["faellig"]),
+        "Gueltig_bis": betraege.datum(dokument["gueltig_bis"]),
         "Betrag": betraege.euro(dateien.summe_von(db, dokument["id"])),
         "Anzahl_Positionen": str(len(positionen)),
         "EigeneFirma": firma,
@@ -292,14 +306,21 @@ def kopfzeile(
     ist_angebot = dokument["art"] == "angebot"
     titel = "Angebot" if ist_angebot else "Rechnung"
 
+    # Die Daten laufen durch betraege.datum(), nicht roh. Gespeichert
+    # wird, wie man es getippt hat; auf der PDF steht es im deutschen
+    # Format. Vorher stand dort genau das Getippte, und ein Datum in
+    # ISO-Form kam ungewandelt auf das Papier.
     angaben: list[tuple[str, str]] = [
-        ("Angebot Nr." if ist_angebot else "Rechnung Nr.", dokument["nummer"] or ""),
-        ("Datum", dokument["datum"] or ""),
+        (
+            "Angebot Nr." if ist_angebot else "Rechnung Nr.",
+            nummer_anzeige(dokument, db),
+        ),
+        ("Datum", betraege.datum(dokument["datum"])),
     ]
     if ist_angebot and dokument["gueltig_bis"]:
-        angaben.append(("Gültig bis", dokument["gueltig_bis"]))
+        angaben.append(("Gültig bis", betraege.datum(dokument["gueltig_bis"])))
     if not ist_angebot and dokument["faellig"]:
-        angaben.append(("Fällig am", dokument["faellig"]))
+        angaben.append(("Fällig am", betraege.datum(dokument["faellig"])))
 
     angaben_zeile = [
         Paragraph(f"{sauber(k)}: {sauber(w)}", stil["kopf_daten"])
@@ -340,9 +361,9 @@ def brieftext(
         vorlage = texte.einsetzen(vorlage, werte)
 
     teile: list[Flowable] = []
-    for nummer, absatz in enumerate(texte.absaetze(vorlage)):
+    for stelle, absatz in enumerate(texte.absaetze(vorlage)):
         erste = texte.zeilen(absatz)[0]
-        ist_anrede = nummer == 0 and erste.endswith(",") and len(erste) <= 40
+        ist_anrede = stelle == 0 and erste.endswith(",") and len(erste) <= 40
         zielstil = stil["anrede"] if ist_anrede else stil["absatz"]
         teile.append(
             Paragraph("<br/>".join(sauber(z) for z in texte.zeilen(absatz)), zielstil)
