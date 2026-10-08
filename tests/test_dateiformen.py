@@ -168,3 +168,31 @@ def test_das_readme_bleibt_kurz() -> None:
         f"Das README hat {len(ueberschreitungen)} Abschnitte. Gehoert nach docs/: "
         f"{ueberschreitungen}"
     )
+
+
+def test_im_projektordner_liegt_nur_die_readme() -> None:
+    """Alle Anleitungen liegen unter ``docs/``, nicht daneben.
+
+    Drei Anleitungen im Wurzelordner, eine davon mit einem Verweis auf die
+    nächste: Man sucht sie am falschen Ort, weil sie nicht am erwarteten
+    Platz liegt. Das ist die ganze Begründung.
+
+    Das README bleibt, weil GitHub es dort erwartet — dort findet jeder, der
+    die Repository-Seite aufmacht.
+    """
+    im_ordner = sorted(pfad.name for pfad in WURZEL.glob("*.md") if pfad.is_file())
+
+    assert im_ordner == ["README.md"], (
+        f"Im Projekt-Root liegen Anleitungen neben dem README: {im_ordner}. "
+        "Sie gehören nach docs/."
+    )
+
+
+def test_und_die_liegen_dort_auch_hin() -> None:
+    """Sonst wäre die erste Regel nur die Hälfte."""
+    gefunden = {pfad.name for pfad in (WURZEL / "docs").glob("*.md")}
+
+    assert gefunden, "Unter docs/ liegt keine Anleitung"
+
+    doppelt = gefunden - {"ANLEITUNG.md", "AUFBAU.md", "BEDIENUNG.md"}
+    assert doppelt == set(), f"Unerwartet im docs-Ordner: {sorted(doppelt)}"

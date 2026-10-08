@@ -37,7 +37,7 @@ Es braucht Python ab 3.11 und sonst nichts.
 
 | | |
 |---|---|
-| [Anleitung](ANLEITUNG.md) | Installation, Start, Fehlersuche, Daten |
+| [Anleitung](docs/ANLEITUNG.md) | Installation, Start, Fehlersuche, Daten |
 | [Bedienung](docs/BEDIENUNG.md) | Menü, Tasten, Textbausteine, Rabatt, PDF |
 | [Aufbau](docs/AUFBAU.md) | Dateien, Farben, Entscheidungen |
 | [Releases](https://github.com/KyrionKS/faktur/releases) | fertige Quelltextdateien zum Auspacken |
