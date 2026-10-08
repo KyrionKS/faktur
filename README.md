@@ -30,6 +30,8 @@ Es braucht Python ab 3.11 und sonst nichts.
 - Brieftexte mit Platzhaltern für Kunde, Datum, Betrag, Bank
 - Rabatt als Position mit festem Betrag
 - PDF in einer Akzentfarbe, dünne Linien, viel Weißraum
+- Größen und Bausteine der PDF selbst einstellen, getrennt für Angebot
+  und Rechnung
 
 ## Mehr
 
@@ -48,3 +50,4 @@ Für die Arbeit daran:
 .venv/bin/python -m ruff check .      # Fehlerprüfung
 .venv/bin/python -m ruff format .     # Formatierung
 ```
+
