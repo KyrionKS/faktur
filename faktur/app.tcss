@@ -120,3 +120,19 @@ Footer {
     background: $panel;
     color: $text-muted;
 }
+
+/* Das Suchfeld über einer Liste.
+ *
+ * Ohne Rahmen. Ein Kasten um ein Feld, das man nur beim Suchen benutzt,
+ * waere lauter als die Liste darunter, nach der man eigentlich sucht. */
+
+#suche {
+    height: 1;
+    border: none;
+    padding: 0;
+}
+
+#suche:focus {
+    border: none;
+}
+

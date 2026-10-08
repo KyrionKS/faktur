@@ -83,6 +83,9 @@ CREATE TABLE IF NOT EXISTS dokumente (
     faellig      TEXT NOT NULL DEFAULT '',
     notiz        TEXT NOT NULL DEFAULT '',
     eigener_text TEXT NOT NULL DEFAULT '',
+    -- Wann bezahlt wurde. Leer heisst offen. Nur eine Rechnung kann
+    -- bezahlt sein, ein Angebot nicht.
+    bezahlt_am   TEXT NOT NULL DEFAULT '',
     erstellt     TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
@@ -113,7 +116,7 @@ NUMMER_STELLEN = 4
 
 #: Die Schemastufe, auf der die Datei heute steht. Sie wird hochgezählt,
 #: damit die zugehörige Wanderung genau einmal läuft.
-SCHEMA_STUFE = 2
+SCHEMA_STUFE = 3
 
 #: Der Name des Eintrags, in dem die Schemastufe steht.
 SCHLUESSEL_STUFE = "schema_stufe"
@@ -183,8 +186,14 @@ def _wandern(verbindung: sqlite3.Connection, pfad: Path) -> None:
         verbindung: Die Datenbankverbindung.
         pfad: Die Datei, um die es geht.
     """
-    if _stufe(verbindung) >= SCHEMA_STUFE:
+    stufe = _stufe(verbindung)
+    if stufe >= SCHEMA_STUFE:
         return
+
+    if stufe < 3:
+        _spalte_ergaenzen(
+            verbindung, "dokumente", "bezahlt_am", "TEXT NOT NULL DEFAULT ''"
+        )
 
     if verbindung.execute("SELECT COUNT(*) AS anzahl FROM dokumente").fetchone()[
         "anzahl"
@@ -200,6 +209,29 @@ def _wandern(verbindung: sqlite3.Connection, pfad: Path) -> None:
         (SCHLUESSEL_STUFE, str(SCHEMA_STUFE)),
     )
     verbindung.commit()
+
+
+def _spalte_ergaenzen(
+    verbindung: sqlite3.Connection, tabelle: str, spalte: str, definition: str
+) -> None:
+    """Legt eine Spalte nach, wenn sie noch nicht da ist.
+
+    SQLite kann Spalten nur hinzufuegen, nicht aendern oder loeschen. Das
+    ist im Alter genau die richtige Beschraenking fuer so eine Anwendung:
+    eine neue Angabe kostet eine Zeile und keine Datenmigration.
+
+    Args:
+        verbindung: Die Datenbankverbindung.
+        tabelle: Der Name der Tabelle.
+        spalte: Der Name der Spalte.
+        definition: Ihr Typ mit Vorgabe.
+    """
+    vorhanden = {
+        zeile["name"] for zeile in verbindung.execute(f"PRAGMA table_info({tabelle})")
+    }
+
+    if spalte not in vorhanden:
+        verbindung.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {definition}")
 
 
 def _stufe(verbindung: sqlite3.Connection) -> int:

@@ -45,6 +45,8 @@ AUS = "○"
 ANZEIGE = {
     "angebot": "Angebot",
     "rechnung": "Rechnung",
+    "vierstellig": "vierstellig",
+    "mit_jahr": "mit Jahr",
 }
 
 #: Die Pfeile um einen Wert herum.
@@ -135,6 +137,7 @@ def bauen(
     art: str,
     logo: str,
     text: str,
+    nummer: str,
     bloecke: Sequence[tuple[str, str, str]],
     an: frozenset[str],
 ) -> list[Zeile]:
@@ -144,6 +147,7 @@ def bauen(
         art: Die gerade gezeigte Dokumentart.
         logo: Der Name der Logogröße.
         text: Der Name der Textgröße.
+        nummer: Die gewählte Schreibweise der Nummer.
         bloecke: Name, Ort und Titel der Blöcke in ihrer Reihenfolge.
         an: Die Namen der eingeschalteten Blöcke.
 
@@ -168,6 +172,12 @@ def bauen(
             titel="Schriftgröße",
             werte=("klein", "normal", "gross"),
             wert=text,
+        ),
+        Zeile(
+            art="groesse",
+            titel="Nummer",
+            werte=("vierstellig", "mit_jahr"),
+            wert=nummer,
         ),
     ]
 

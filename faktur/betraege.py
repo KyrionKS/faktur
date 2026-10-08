@@ -130,6 +130,20 @@ def _heute() -> datetime.date:
     return datetime.date.today()
 
 
+def lies_datum(text: str) -> datetime.date | None:
+    """Liest ein Datum in irgendeiner gangbaren Schreibweise.
+
+    Öffentlich, weil :mod:`faktur.nummer` daraus die Jahreszahl holt.
+
+    Args:
+        text: Das Datum, wie es in der Datenbank steht.
+
+    Returns:
+        Das Datum, oder ``None``, wenn keines erkannt wurde.
+    """
+    return _parse(text)
+
+
 def _parse(text: str) -> datetime.date | None:
     """Liest ein Datum in deutscher oder englischer Schreibweise.
 

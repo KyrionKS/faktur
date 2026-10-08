@@ -19,6 +19,10 @@ hier nicht.
 | `faktur/dateien.py` | Kunden, Leistungen, Dokumente |
 | `faktur/einstellungen.py` | Stammdaten, Logo, Textbausteine |
 | `faktur/bloecke.py` | welche Bausteine auf ein Dokument kommen |
+| `faktur/offen.py` | offene und überfällige Rechnungen |
+| `faktur/sichern.py` | die Sicherungskopie |
+| `faktur/suchen.py` | das Suchfeld über den Listen |
+| `faktur/nummer.py` | wie eine Nummer auf dem Dokument aussieht |
 | `faktur/betraege.py` | Geldbeträge und Datumsangaben |
 | `faktur/texte.py` | Platzhalter einsetzen |
 | `faktur/gestaltung.py` | Farben und Größen der PDF |
@@ -103,6 +107,9 @@ sich nur die Schriften und ihre Positionen.
 | `tests/test_bloecke.py` | hält fest, dass die Voreinstellung das alte Dokument ist |
 | `tests/test_ausgabe.py` | prüft, was auf der PDF steht und wo |
 | `tests/test_einstellungsliste.py` | prüft die Entscheidungen der Bedienliste |
+| `tests/test_offen.py` | prüft, was offen ist und was nicht |
+| `tests/test_sichern.py` | prüft, dass gesichert und nicht gezogen wird |
+| `tests/test_suchen.py` | prüft die Suche und dass keine Taste ins Leere zeigt |
 | `tests/test_dateiformen.py` | prüft Zeilenumbrüche und die Startskripte |
 | `tests/test_version.py` | hält die Versionsangaben zusammen |
 | `tests/test_python_version.py` | hält `requires-python` und den Quelltext zusammen |
@@ -121,5 +128,6 @@ kopiert, nicht verschoben — der Beleg bleibt stehen.
 Ein gebautes `.app` gibt es bewusst auch nicht. Ein Packer übersetzt nicht:
 was auf einem Rechner gebaut wird, startet auf einem anderen nicht zuverlässig.
 Ein Programm im Terminal braucht das auch nicht.
+
 
 

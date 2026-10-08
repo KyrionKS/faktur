@@ -10,6 +10,7 @@ from textual.widgets import Static
 
 from faktur import betraege, dateien
 from faktur.basis import BasisScreen
+from faktur.suchen import Suchfeld, SuchZeile, filtern
 from faktur.widgets import Formular, Tabelle
 
 #: Die Felder des Kundenformulars.
@@ -58,6 +59,7 @@ class KundenListeScreen(BasisScreen):
             verbindung: Die Datenbankverbindung.
         """
         super().__init__(verbindung)
+        self._suche = ""
         self.kunden = dateien.kunden(verbindung)
 
     def inhalt(self) -> ComposeResult:
@@ -66,11 +68,8 @@ class KundenListeScreen(BasisScreen):
         Yields:
             Die Kindelemente.
         """
-        yield Static(
-            f"{len(self.kunden)} Kunden. Enter öffnet, F2 ändert, Entf löscht.",
-            classes="hinweis",
-            id="hinweis",
-        )
+        yield Suchfeld(self._suche_geaendert)
+        yield SuchZeile(id="hinweis")
         yield Tabelle(
             [("Firma", 28), ("Ansprechpartner", 20), ("Ort", 18), ("Kontakt", 24)],
             [_zeile(kunde) for kunde in self.kunden],
@@ -87,14 +86,40 @@ class KundenListeScreen(BasisScreen):
     def aktualisieren(self) -> None:
         """Holt die Kunden aus der Datenbank und zeichnet die Liste neu."""
         self.kunden = dateien.kunden(self.db)
+        self._suche = ""
+
+        self._suche_anwenden()
+
+    def _suche_geaendert(self, begriff: str) -> None:
+        """Sucht weiter, während getippt wird.
+
+        Args:
+            begriff: Der Text im Suchfeld.
+        """
+        self._suche = begriff
+        self._suche_anwenden()
+
+    def _suche_anwenden(self) -> None:
+        """Zeichnet die Liste mit dem, was zur Suche passt."""
+        alle = [_zeile(kunde) for kunde in self.kunden]
+        passend = filtern(alle, self._suche)
+
         tabelle = self.query_one(Tabelle)
-        tabelle.zeilen = [_zeile(kunde) for kunde in self.kunden]
-        tabelle.index = min(tabelle.index, max(0, len(tabelle.zeilen) - 1))
+        tabelle.zeilen = passend
+        tabelle.index = min(tabelle.index, max(0, len(passend) - 1))
         tabelle.refresh()
 
-        self.query_one("#hinweis").update(  # type: ignore[arg-type]
-            f"{len(self.kunden)} Kunden. Enter öffnet, F2 ändert, Entf löscht."
+        self.query_one(SuchZeile).zeige(
+            len(passend), len(alle), self._suche, "Kunden", "Kunde"
         )
+
+    def action_suchen(self) -> None:
+        """Legt den Cursor ins Suchfeld.
+
+        Seit es die Kundenliste gibt, stand diese Taste in der Fußzeile und
+        tat nichts. Sie ist endlich verdrahtet.
+        """
+        self.query_one(Suchfeld).focus()
 
     def action_neu(self) -> None:
         """Öffnet das Formular für einen neuen Kunden."""
