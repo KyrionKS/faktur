@@ -62,7 +62,10 @@ def test_die_version_ist_nicht_leer() -> None:
     assert __version__.strip() != ""
 
 
-@pytest.mark.parametrize("datei", ["README.md", "ANLEITUNG.md", "docs/BEDIENUNG.md"])
+@pytest.mark.parametrize(
+    "datei",
+    ["README.md", "docs/ANLEITUNG.md", "docs/BEDIENUNG.md"],
+)
 def test_die_texte_nennen_keine_feste_versionsnummer(datei: str) -> None:
     """Kein Dokument schreibt eine Nummer fest.
 

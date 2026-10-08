@@ -364,4 +364,3 @@ class Einstellungen(Static):
         zeile.wert = naechster_wert(zeile.werte, zeile.wert, richtung)
         self.refresh()
         self.geaendert(zeile)
-
