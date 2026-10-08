@@ -44,6 +44,7 @@ class StammdatenScreen(BasisScreen):
         ("angebot", "3", "Text für Angebote", "Der Brief, der mitgeht"),
         ("rechnung", "4", "Text für Rechnungen", "Der Brief, der mitgeht"),
         ("platzhalter", "5", "Platzhalter", "Was das Programm einsetzen kann"),
+        ("aussehen", "6", "Aussehen der PDF", "Größen und was draufsteht"),
     )
 
     def inhalt(self) -> ComposeResult:
@@ -81,6 +82,10 @@ class StammdatenScreen(BasisScreen):
             self.app.push_screen(BausteinScreen(self.db, aktion))
         elif aktion == "platzhalter":
             self.app.push_screen(PlatzhalterScreen(self.db))
+        elif aktion == "aussehen":
+            from faktur.screens.aussehen import AussehenScreen
+
+            self.app.push_screen(AussehenScreen(self.db))
 
     def logo_waehlen(self) -> None:
         """Sucht eine Logo-Datei und übernimmt sie.
