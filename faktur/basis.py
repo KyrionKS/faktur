@@ -44,6 +44,9 @@ class BasisScreen(Screen[object]):
         """
         super().__init__()
         self.db = verbindung
+        #: Was nach einem Ja in einer Frage passieren soll. ``None`` heisst
+        #: :meth:`bestaetigt`.
+        self._antwort_danach: object = None
 
     def on_mount(self) -> None:
         """Setzt den Fokus auf das, was bedienbar ist."""
@@ -136,12 +139,15 @@ class BasisScreen(Screen[object]):
             with contextlib.suppress(NoMatches):
                 bildschirm.query_one(Meldung).zeige(text, gut)
 
-    def bestaetigen(self, text: str) -> None:
+    def bestaetigen(self, text: str, danach: object = None) -> None:
         """Fragt nach, bevor etwas Endgültiges passiert.
 
         Args:
             text: Die Frage.
+            danach: Wird nach einem Ja aufgerufen. Ohne Angabe wird
+                :meth:`bestaetigt` benutzt, wie es seit je war.
         """
+        self._antwort_danach = danach
         self.app.push_screen(FrageScreen("Sicher?", text), self._antwort_gekommen)
 
     def _antwort_gekommen(self, antwort: bool | None) -> None:
@@ -150,7 +156,13 @@ class BasisScreen(Screen[object]):
         Args:
             antwort: ``True``, wenn ja gewählt wurde.
         """
-        if antwort:
+        danach = self._antwort_danach
+        self._antwort_danach = None
+        if not antwort:
+            return
+        if danach is not None:
+            danach()  # type: ignore[operator]
+        else:
             self.bestaetigt()
 
     def bestaetigt(self) -> None:
