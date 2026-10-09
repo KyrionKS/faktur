@@ -146,8 +146,32 @@ leerer Datenordner bedeutet: erster Start.
 Angebot und Rechnung teilen sich den Ordner; die Art steht im Dateinamen.
 
 `daten/` ist der ganze Bestand: Kunden, Leistungen, Angebote, Rechnungen.
-Der Ordner lässt sich kopieren, verschieben und sichern. Mehr braucht es
-nicht.
+
+## Das Programm macht keine Sicherungen
+
+Das ist Absicht und keine Vergesslichkeit: Es gab eine Sicherungsfunktion,
+und sie wurde wieder entfernt, weil der Rahmen größer war als die Sache
+selbst.
+
+**Was das bedeutet:** Fällt die Platte aus, ist alles weg. Bei einem Angebot,
+das schon beim Kunden liegt, gibt es kein Zurück — die Nummer steht gedruckt
+auf einem Dokument, das niemandem mehr gehört.
+
+**Was zu tun ist.** Den Ordner `daten` von Zeit zu Zeit auf eine andere Platte
+kopieren, und zwar mit geschlossenem Programm:
+
+```bash
+cp -r ~/Vibecoding/faktur/daten ~/Sicherung-faktur
+```
+
+Ein Kopieren bei laufendem Programm kann eine halb geschriebene Datenbank
+erwischen. Die ist dann zwar nicht verloren — neben ihr liegt eine Kopie —
+aber die Meldung beim nächsten Start wäre verwirrend.
+
+Wer das nicht selbst erinnern will, lässt den Ordner in einer Cloud
+mitlaufen. Ein Programm, das seine eigenen Daten kopiert, kopiert sie
+irgendwann ausgerechnet dann, wenn es damit beschäftigt ist, eine Rechnung zu
+schreiben.
 
 ## Terminals
 
@@ -161,3 +185,4 @@ kleiner, passt das Menü nicht und es sieht abgeschnitten aus.
 
 Ohne Farbe geht alles auch: mit `NO_COLOR=1` wird alles schwarz geschrieben,
 das Menü bleibt bedienbar.
+

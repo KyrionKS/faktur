@@ -19,10 +19,11 @@ selbst ändert sich nicht mehr.
     2. Rechnung erstellen        Aus Leistungen abrechnen
     3. Kunden                    Kunden anlegen, ansehen, suchen
     4. Leistungen                Die Preisliste pflegen
-    5. Dokumente                 Angebote und Rechnungen durchsehen
-    6. Stammdaten                Firma, Bank, Logo, Brieftexte
-    7. PDF neu schreiben         Ein Dokument noch einmal ausgeben
-    8. Rechnungsordner öffnen    Den Ordner mit den PDF zeigen
+    5. Offene Forderungen        Was noch nicht bezahlt ist
+    6. Dokumente                 Angebote und Rechnungen durchsehen
+    7. Stammdaten                Firma, Bank, Logo, Brieftexte
+    8. PDF neu schreiben         Ein Dokument noch einmal ausgeben
+    9. Rechnungsordner öffnen    Den Ordner mit den PDF zeigen
     q. Beenden                   Das Programm verlassen
 ```
 
@@ -256,23 +257,6 @@ Angebote stehen nie in dieser Liste. Ein Angebot wird nicht in Rechnung
 gestellt, und ein als bezahlt markiertes Angebot wäre eine Angabe, die nicht
 stimmt. Das Programm lässt sich deshalb weigern, eines zu markieren.
 
-## Sichern
-
-Punkt `9`. Kopiert den Ordner `daten/` in einen Ordner `Sicherung` neben dem
-Programm, mit Datum und Uhrzeit im Namen.
-
-`daten/` ist der ganze Bestand: Kunden, Leistungen, jedes Angebot, jede
-Rechnung und die PDF dazu. Auf einer Platte, ohne Kopie, ist irgendwann
-alles weg — und bei einem Angebot, das schon beim Kunden liegt, gibt es kein
-Zurück: Die Nummer steht gedruckt auf einem Dokument, das niemandem mehr
-gehört.
-
-Gesichert wird **kopiert, nicht verschoben**. Der Ordner bleibt, wo er ist,
-und die Kopie ist etwas, das man jederzeit wegwerfen kann.
-
-Die zehn neuesten Sicherungen bleiben liegen. Welche als nächste anstehen,
-steht in der Liste dabei — gelöscht wird nichts ohne ausdrücklichen Wunsch.
-
 ## Suchen
 
 Auf der Kunden- und auf der Dokumentenliste steht oben ein Feld.
@@ -289,4 +273,6 @@ keine Rolle. Wer `check` tippt, findet *Soundcheck*.
 Auf der Dokumentenliste bleibt die markierte Zeile dieselbe: Wer einen
 Kunden sucht und dann ein Angebot in eine Rechnung umwandelt, wandelt das
 gefundene um. Gefiltert wird über die Nummer, die eindeutig ist.
+
+
 

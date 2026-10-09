@@ -22,7 +22,7 @@ from faktur.basis import BasisScreen
 from faktur.screens.dokumente import DokumentenScreen, EditorScreen
 from faktur.screens.kunden import KundenListeScreen
 from faktur.screens.leistungen import LeistungenScreen
-from faktur.screens.sorgen import OffeneScreen, SichernScreen
+from faktur.screens.offene import OffeneScreen
 from faktur.screens.stammdaten import StammdatenScreen
 from faktur.widgets import Auswahl
 
@@ -44,8 +44,7 @@ class MenueScreen(BasisScreen):
         ("dokumente", "6", "Dokumente", "Angebote und Rechnungen durchsehen"),
         ("stammdaten", "7", "Stammdaten", "Firma, Bank, Logo, Brieftexte"),
         ("pdf", "8", "PDF neu schreiben", "Ein Dokument noch einmal ausgeben"),
-        ("sichern", "9", "Sichern", "Eine Kopie vom ganzen Bestand"),
-        ("ordner", "0", "Rechnungsordner öffnen", "Den Ordner mit den PDF zeigen"),
+        ("ordner", "9", "Rechnungsordner öffnen", "Den Ordner mit den PDF zeigen"),
         ("quit", "q", "Beenden", "Das Programm verlassen"),
     )
 
@@ -86,8 +85,6 @@ class MenueScreen(BasisScreen):
             self.app.push_screen(DokumentenScreen(self.db, nur_drucken=True))
         elif aktion == "offen":
             self.app.push_screen(OffeneScreen(self.db))
-        elif aktion == "sichern":
-            self.app.push_screen(SichernScreen(self.db))
         elif aktion == "ordner":
             self.ordner_oeffnen()
 

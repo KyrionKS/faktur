@@ -1,14 +1,12 @@
-"""Die beiden Bildschirme, die um Sorgen kümmern.
+"""Der Bildschirm mit den offenen Forderungen.
 
-**Offene Forderungen** beantwortet die Frage, die bei Rechnungen die
-wichtigste ist: Was ist noch offen? Nicht, weil hier gemahnt würde —
-Mahnwesen ist bewusst nicht dabei —, sondern weil eine unbeachtete
-Rechnung das teuerste Ergebnis dieses Programms wäre.
+Er beantwortet die Frage, die bei Rechnungen die wichtigste ist: Was ist
+noch offen? Nicht, weil hier gemahnt würde — Mahnwesen ist bewusst nicht
+dabei —, sondern weil eine unbeachtete Rechnung das teuerste Ergebnis
+dieses Programms wäre.
 
-**Sichern** kopiert den Datenordner. Auf einer Platte, ohne Kopie, ist der
-ganze Bestand irgendwann weg, und bei einem Angebot, das schon beim Kunden
-liegt, gibt es kein Zurück: Die Nummer steht gedruckt auf einem Dokument,
-das niemandem mehr gehört.
+Das Programm macht keine Sicherungen. Den Ordner ``daten/`` kopiert man
+selbst; das steht so auch in der Anleitung.
 """
 
 from __future__ import annotations
@@ -20,7 +18,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.widgets import Static
 
-from faktur import betraege, dateien, offen, sichern
+from faktur import betraege, dateien, offen
 from faktur.basis import BasisScreen
 from faktur.suchen import Suchfeld, SuchZeile, filtern
 from faktur.widgets import Tabelle
@@ -156,59 +154,3 @@ class OffeneScreen(BasisScreen):
         self.posten = offen.offene(self.db)
         self._zeichne()
         self.meldung(f"Rechnung {posten['nummer']} als bezahlt vermerkt.", gut=True)
-
-
-class SichernScreen(BasisScreen):
-    """Kopiert den Datenordner und zeigt, was schon gesichert ist."""
-
-    BINDINGS = [Binding("n", "neu", "Jetzt sichern", show=True)]
-
-    def __init__(self, verbindung: sqlite3.Connection) -> None:
-        """Legt den Bildschirm an.
-
-        Args:
-            verbindung: Die Datenbankverbindung.
-        """
-        super().__init__(verbindung)
-
-    def inhalt(self) -> ComposeResult:
-        """Baut die Anzeige.
-
-        Yields:
-            Die Kindelemente.
-        """
-        yield Static(
-            "Der Ordner daten/ ist der ganze Bestand: Kunden, Leistungen, "
-            "jedes Angebot, jede Rechnung und die PDF dazu.\n"
-            "n sichert jetzt. Die alten Sicherungen bleiben liegen.",
-            classes="hinweis",
-            id="erklaerung",
-        )
-        yield Static("", id="liste")
-
-    def start_fokus(self) -> None:
-        """Nichts zu bedienen, ausser den Tasten."""
-        return
-
-    def on_screen_resume(self) -> None:
-        """Zeigt die vorhandenen Sicherungen."""
-        self._zeichne()
-
-    def _zeichne(self) -> None:
-        """Schreibt die Liste der Sicherungen."""
-        self.query_one("#liste", Static).update("\n".join(sichern.texte()))  # type: ignore[arg-type]
-
-    def action_neu(self) -> None:
-        """Sichert jetzt.
-
-        Args:
-            None
-        """
-        try:
-            ordner = sichern.sichere()
-        except sichern.Fehler as grund:
-            self.meldung(str(grund), gut=False)
-            return
-
-        self._zeichne()
-        self.meldung(f"Gesichert nach {ordner.name}", gut=True)
