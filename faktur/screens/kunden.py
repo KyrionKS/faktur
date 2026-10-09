@@ -10,7 +10,7 @@ from textual.widgets import Static
 
 from faktur import betraege, dateien
 from faktur.basis import BasisScreen
-from faktur.suchen import Suchfeld, SuchZeile, filtern
+from faktur.suchen import Suchfeld, SuchZeile, sichtbar
 from faktur.widgets import Formular, Tabelle
 
 #: Die Felder des Kundenformulars.
@@ -60,7 +60,12 @@ class KundenListeScreen(BasisScreen):
         """
         super().__init__(verbindung)
         self._suche = ""
-        self.kunden = dateien.kunden(verbindung)
+        #: Alle Kunden, ungefiltert. Die gefilterte Liste steht in
+        #: ``self.kunden``. Wird ein und dasselbe fuer beide benutzt, ist
+        #: nach dem Filtern nichts mehr da, was ein Backspace zurueckholen
+        #: koennte — die Liste waere ein Einbahnstrasse.
+        self.alle_kunden = dateien.kunden(verbindung)
+        self.kunden = list(self.alle_kunden)
 
     def inhalt(self) -> ComposeResult:
         """Baut die Liste.
@@ -85,7 +90,8 @@ class KundenListeScreen(BasisScreen):
 
     def aktualisieren(self) -> None:
         """Holt die Kunden aus der Datenbank und zeichnet die Liste neu."""
-        self.kunden = dateien.kunden(self.db)
+        self.alle_kunden = dateien.kunden(self.db)
+        self.kunden = list(self.alle_kunden)
         self._suche = ""
 
         self._suche_anwenden()
@@ -100,17 +106,29 @@ class KundenListeScreen(BasisScreen):
         self._suche_anwenden()
 
     def _suche_anwenden(self) -> None:
-        """Zeichnet die Liste mit dem, was zur Suche passt."""
-        alle = [_zeile(kunde) for kunde in self.kunden]
-        passend = filtern(alle, self._suche)
+        """Zeichnet die Liste mit dem, was zur Suche passt.
+
+        Gefiltert wird Datensatz **und** Zeile zusammen, und ``self.kunden``
+        wird auf das Ergebnis gesetzt. Vor 0.8.2 stand hier nur ein
+        ``filtern`` über die Zeilen, die Liste selbst blieb ganz — wer
+        *Zeta Tonwerk* suchte, sah *Zeta Tonwerk*, öffnete aber *Alpha
+        Klangstudio*, und konnte mit derselben Folge auch löschen.
+        """
+        paare = sichtbar(
+            self.alle_kunden,
+            [_zeile(k) for k in self.alle_kunden],
+            self._suche,
+        )
+
+        self.kunden = [kunde for kunde, _zeile_ in paare]
 
         tabelle = self.query_one(Tabelle)
-        tabelle.zeilen = passend
-        tabelle.index = min(tabelle.index, max(0, len(passend) - 1))
+        tabelle.zeilen = [zeile for _kunde, zeile in paare]
+        tabelle.index = min(tabelle.index, max(0, len(paare) - 1))
         tabelle.refresh()
 
         self.query_one(SuchZeile).zeige(
-            len(passend), len(alle), self._suche, "Kunden", "Kunde"
+            len(paare), len(self.alle_kunden), self._suche, "Kunden", "Kunde"
         )
 
     def action_suchen(self) -> None:
