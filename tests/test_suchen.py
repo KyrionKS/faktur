@@ -25,7 +25,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from faktur.suchen import filtern, passt
+from faktur.suchen import filtern, passt, sichtbar
 
 #: Vier Zeilen zum Suchen.
 ZEILEN = [
@@ -130,34 +130,48 @@ def test_passt_behandelt_leere_spalten() -> None:
 # ------------------------------------------------- die Suche muss etwas finden
 
 
-def test_die_dokumentenliste_filtert_ueber_die_nummer() -> None:
-    """Nicht ueber den ganzen Text: Die Nummer ist eindeutig.
+def test_zwei_dokumente_koennen_dieselbe_nummer_tragen() -> None:
+    """Angebot und Rechnung eines Projekts stehen mit derselben Nummer da.
 
-    Zwei Dokumente koennten denselben Kunden und denselben Betrag haben.
-    Vergleicht man die ganze Zeile, waere die Liste ploetzlich laenger als
-    die Dokumente, die sie zeigen soll — und der Index der Tabelle wuerde
-    auf das falsche Dokument zeigen. Beim Umwandeln und beim Loeschen waere
-    dann das falsche Dokument dran.
+    Bis 0.8.2 war das ein Sonderfall, den man gar nicht herstellen konnte:
+    Die Nummer musste eindeutig sein. Seit 0.9.0 ist sie eine Projektnummer,
+    und zwei Dokumente duerfen sie teilen. Das ist hier die Grundlage fuer
+    alles, was `tests/test_projektnummer.py` prueft.
 
     Args:
         None
     """
     zeilen = [
-        ["Rechnung", "0001", "Soundcheck GmbH", "01.10.2026", "850,00 €"],
-        ["Rechnung", "0002", "Soundcheck GmbH", "01.10.2026", "850,00 €"],
+        ["Angebot", "0199", "Tonstudio Nordwind", "06.10.2026", "850,00 €"],
+        ["Rechnung", "0199", "Tonstudio Nordwind", "20.10.2026", "850,00 €"],
     ]
 
-    passend = filtern(zeilen, "0002")
-    nummern = {zeile[1] for zeile in passend}
+    assert len({zeile[1] for zeile in zeilen}) == 1
 
-    sichtbar = [
-        dokument
-        for dokument, zeile in zip(zeilen, zeilen, strict=True)
-        if zeile[1] in nummern
+
+def test_die_sichtbare_liste_haelt_die_reihenfolge() -> None:
+    """Wer nach der Nummer sucht, sieht beide Dokumente des Projekts.
+
+    Der Filter arbeitet ueber die Indizes und gibt Datensatz und Zeile
+    paarweise zurueck. Deshalb kann die Liste nicht laenger werden als die
+    Dokumente, die sie zeigt — auch dann nicht, wenn zwei Zeilen gleich
+    aussehen.
+
+    Args:
+        None
+    """
+    dokumente = [{"id": 1, "art": "angebot"}, {"id": 2, "art": "rechnung"}]
+    zeilen = [
+        ("Angebot", "0199", "Tonstudio Nordwind"),
+        ("Rechnung", "0199", "Tonstudio Nordwind"),
     ]
 
-    assert len(sichtbar) == 1
-    assert sichtbar[0][1] == "0002"
+    paare = sichtbar(dokumente, zeilen, "0199")
+
+    assert [d["id"] for d, _z in paare] == [1, 2]
+    assert len(paare) == len(zeilen), (
+        "Der Filter hat Zeilen erzeugt, zu denen es kein Dokument gibt."
+    )
 
 
 # ------------------------------------------- keine Taste darf ins Leere zeigen

@@ -265,7 +265,7 @@ def test_dateiname_ist_fuer_dateisysteme_sicher(verbindung: sqlite3.Connection) 
     Args:
         verbindung: Die Testdatenbank.
     """
-    from faktur.screens.dokumente import dateiname
+    from faktur.dateien import dateiname
 
     kunde_id = dateien.kunde_speichern(verbindung, {"firma": "Bild/Video AG"})
     dokument_id = dateien.dokument_speichern(
@@ -380,7 +380,7 @@ def test_dateiname_hat_art_nummer_und_kunde(verbindung: sqlite3.Connection) -> N
     Args:
         verbindung: Die Testdatenbank.
     """
-    from faktur.screens.dokumente import dateiname
+    from faktur.dateien import dateiname
 
     _vorbereiten(verbindung)
     kunde = dateien.kunden(verbindung)[0]
