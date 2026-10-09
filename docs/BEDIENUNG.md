@@ -21,7 +21,7 @@ selbst ändert sich nicht mehr.
     4. Leistungen                Die Preisliste pflegen
     5. Offene Forderungen        Was noch nicht bezahlt ist
     6. Dokumente                 Angebote und Rechnungen durchsehen
-    7. Stammdaten                Firma, Bank, Logo, Brieftexte
+    7. Stammdaten                Firma, Bank, Brieftexte, PDF-Aussehen
     8. PDF neu schreiben         Ein Dokument noch einmal ausgeben
     9. Rechnungsordner öffnen    Den Ordner mit den PDF zeigen
     q. Beenden                   Das Programm verlassen
@@ -103,7 +103,7 @@ an. Die Taste meint immer dasselbe: abrechnen.
 
 ## Textbausteine
 
-Unter `6` → `3` und `4`: je ein Text für Angebote und für Rechnungen.
+Unter `7` → `2` und `3`: je ein Text für Angebote und für Rechnungen.
 
 Das ist ein eigener Editor mit Zeilennummern, kein einzeiliges Feld — der
 Text hat Absätze, und die müssen beim Speichern unbeschädigt bleiben. Leerzeilen
@@ -179,7 +179,7 @@ inklusive Steuer als Endpreis ein.
 
 ## Aussehen der PDF
 
-Unter `6` → `6`. Ein Bildschirm mit drei Teilen:
+Unter `7` → `5`. Ein Bildschirm mit drei Teilen:
 
 ```
  ▶  Dokumentart         ◀ Rechnung ▸

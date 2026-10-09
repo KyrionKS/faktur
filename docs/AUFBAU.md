@@ -15,7 +15,7 @@ hier nicht.
 | `faktur/editor.py` | der mehrzeilige Editor für die Brieftexte |
 | `faktur/zeichen.py` | das Logo als Text |
 | `faktur/farben.py` | die Farben mit ihrem Kontrast |
-| `faktur/db.py` | Schema, Verbindung, Umzug und Nummern |
+| `faktur/db.py` | Schema, Verbindung, Umzug und Nummern. Die Spalte `erstellt` in `dokumente` wird nie gelesen; sie zu entfernen kostete eine vierte Migrationsstufe, also bleibt sie |
 | `faktur/dateien.py` | Kunden, Leistungen, Dokumente |
 | `faktur/einstellungen.py` | Stammdaten, Logo, Textbausteine |
 | `faktur/bloecke.py` | welche Bausteine auf ein Dokument kommen |
@@ -99,7 +99,6 @@ sich nur die Schriften und ihre Positionen.
 | `scripts/durchlauf_pruefen.py` | Daten anlegen und PDF schreiben, ohne Menü |
 | `scripts/ablauf_pruefen.py` | Tastendurchlauf durch das ganze Programm |
 | `scripts/bilder_speichern.py` | Bildschirme als PNG ablegen |
-| `scripts/bild_pruefen.py` | ein Bild gegen einen Vergleich prüfen |
 | `tests/test_repository.py` | verhindert, dass Benutzerdaten ins Repository kommen |
 | `tests/test_keine_nutzerdaten.py` | verhindert, dass ein Testlauf die Daten des Benutzers anfasst |
 | `tests/test_gestaltung.py` | hält fest, dass die Größen das Alte ergeben |
@@ -108,6 +107,11 @@ sich nur die Schriften und ihre Positionen.
 | `tests/test_einstellungsliste.py` | prüft die Entscheidungen der Bedienliste |
 | `tests/test_offen.py` | prüft, was offen ist und was nicht |
 | `tests/test_suchen.py` | prüft die Suche und dass keine Taste ins Leere zeigt |
+| `tests/test_suchregel.py` | hält fest, dass es nur **einen** Filter gibt und jedes Suchfeld bedienbar ist |
+| `tests/test_auswahl_trifft.py` | sucht einen Kunden und prüft, dass Öffnen und Löschen den **gesehenen** treffen |
+| `tests/test_kleines_terminal.py` | prüft, dass bei 90×20 kein Feld außerhalb des Bildes liegt |
+| `tests/test_menue.py` | vergleicht Menütafel und Anleitungen mit dem Programm |
+| `tests/test_skripte.py` | prüft die Werkzeuge unter `scripts/` und ihre Voraussetzungen |
 | `tests/test_dateiformen.py` | prüft Zeilenumbrüche und die Startskripte |
 | `tests/test_version.py` | hält die Versionsangaben zusammen |
 | `tests/test_python_version.py` | hält `requires-python` und den Quelltext zusammen |
