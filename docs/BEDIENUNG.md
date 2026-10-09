@@ -81,13 +81,24 @@ dir genannt.
 
 ## Nummern
 
-Vier Stellen, führende Nullen: `0001`, `0002`, `0003`. **Angebot und
-Rechnung kommen aus einem Zähler**, damit nebeneinandersteht, dass sie zum
-selben Vorgang gehören. Angebot `0001` und Rechnung `0002` sind Paar und
-Vorgang.
+**Die Nummer ist eine Projektnummer, und die vergibst du.** Sie gehoert zu
+einem Projekt, nicht zu einem Dokument: Jedes Projekt hat ein Angebot *und*
+eine Rechnung, und **beide tragen dieselbe Nummer**. Angebot `0199` und
+Rechnung `0199` sind ein Vorgang.
 
-Die Nummer wird vorgeschlagen, aber sie gehört dir und deinem Steuerberater.
-Die Datenbank lässt keine doppelte Nummer zu, auch nicht über die Art hinweg.
+Das Programm prüft nichts daran und sagt nichts dazu. Es schlägt nur eine
+Nummer vor — bei einem neuen Dokument die höchste vergebene plus eins
+(`0001`, `0002`, …) — und die kannst du überschreiben, mit allem, was du
+intern führst. Vier Stellen bleiben die Voreinstellung.
+
+Wenn du ein Angebot über die Dokumentenliste abrechnest, **wandert die Nummer
+mit**. Aus Angebot `0199` wird Rechnung `0199`, ohne dass du etwas tippst.
+Das Angebot bleibt als Beleg stehen.
+
+Bis 0.8.2 galt das Gegenteil: Die Nummer musste für sich allein eindeutig
+sein, ein `UNIQUE`-Index lag darauf, und das Programm lehnte jede zweite
+Nummern ab. Genau das konnte ein Projekt mit Angebot und Rechnung nicht
+abbilden.
 
 ## Angebot in Rechnung
 
@@ -293,7 +304,11 @@ Nordwind ins Angebot und nicht den ersten Kunden der Liste.
 
 Auf der Dokumentenliste bleibt die markierte Zeile dieselbe: Wer einen
 Kunden sucht und dann ein Angebot in eine Rechnung umwandelt, wandelt das
-gefundene um. Gefiltert wird über die Nummer, die eindeutig ist.
+gefundene um.
+
+Wer nach einer Projektnummer sucht, bekommt deshalb **beide** Dokumente
+dieses Projekts zu sehen — das Angebot und seine Rechnung. Genau daran
+erkennst du am Papier und in der Liste, dass sie zusammengehören.
 
 
 

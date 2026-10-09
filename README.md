@@ -24,8 +24,9 @@ Es braucht Python ab 3.11 und sonst nichts.
 
 ## Was es kann
 
-- Angebote und Rechnungen aus einer gemeinsamen Preisliste, Nummern aus
-  einem Zähler
+- Angebote und Rechnungen aus einer gemeinsamen Preisliste, mit deinen
+  eigenen Projektnummern — Angebot und Rechnung eines Projekts tragen
+  dieselbe
 - Angebot per Tastendruck in eine Rechnung umwandeln
 - Brieftexte mit Platzhaltern für Kunde, Datum, Betrag, Bank
 - Rabatt als Position mit festem Betrag
