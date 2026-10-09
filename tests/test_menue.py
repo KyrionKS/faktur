@@ -112,13 +112,17 @@ def _faelle() -> list[tuple[str, list[str], str]]:
     quelle = (WURZEL / "scripts" / "bilder_speichern.py").read_text(encoding="utf-8")
     gefunden = []
 
-    for zeile in quelle.splitlines():
-        treffer = re.match(
-            r'\s*\("(\d+_\w+)",\s*(\[[^\]]*\]),\s*(\w+|None),\s*"(\w+)"\)', zeile
-        )
-        if treffer:
-            tasten = re.findall(r'"([^"]+)"', treffer.group(2))
-            gefunden.append((treffer.group(1), tasten, treffer.group(4)))
+    # ``re.DOTALL`` ist noetig, weil ``ruff format`` einen langen Fall ueber
+    # mehrere Zeilen umbricht. Zeilenweise gelesen waeren die stillschweigend
+    # weggefallen — der Waechter haette dann nur noch ueber die uebrigen
+    # Faelle gewacht und nichts gemerkt.
+    for treffer in re.finditer(
+        r'\(\s*"(\d+_\w+)",\s*(\[[^\]]*\]),\s*(?:\w+|None)\s*,\s*"(\w+)"\s*,?\s*\)',
+        quelle,
+        re.DOTALL,
+    ):
+        tasten = re.findall(r'"([^"]+)"', treffer.group(2))
+        gefunden.append((treffer.group(1), tasten, treffer.group(3)))
 
     return gefunden
 
@@ -212,6 +216,8 @@ def test_die_bilder_sind_benannt_wie_ihre_bildschirme() -> None:
         "09_aussehen": "AussehenScreen",
         "10_aussehen_rechnung": "AussehenScreen",
         "11_offene": "OffeneScreen",
+        "12_kundensuche": "EditorScreen",
+        "13_leistungssuche": "LeistungAuswahlScreen",
     }
 
     gefunden = {name: bildschirm for name, _t, bildschirm in _faelle()}

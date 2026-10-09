@@ -130,21 +130,59 @@ async def durchlauf() -> int:
         )
         pruefe("Kunde gespeichert", "Soundcheck GmbH")
 
+        # --- Zweiter Kunde, und zwar absichtlich weiter unten im Alphabet.
+        # Ohne ihn ist die Suche im ersten Schritt nicht pruefbar: Es gibt
+        # nur einen Kunden, und bei einem einzigen kann die Suche gar nicht
+        # danebenliegen.
+        await tippen("n")
+        await feld_ausfuellen(
+            [
+                "Tonstudio Nordwind",
+                "Frau Erika Beispiel",
+                "Hafenstrasse 9",
+                "20457",
+                "Hamburg",
+            ],
+            felder=8,
+        )
+        pruefe("Zweiter Kunde gespeichert", "Tonstudio Nordwind")
+
         # --- Angebot bauen
         await tippen("escape")
         await tippen("1")
         pruefe("Angebot, Kunde wählen", "Schritt 1 von 3")
-        await tippen("enter")
+
+        # Der Kunde wird **gesucht**, nicht geblaettert. Beachtet wird das
+        # Ergebnis: Ist "Tonstudio Nordwind" der Filter, muss genau dieser
+        # Kunde im Angebot stehen — nachgewiesen spaeter am Dateinamen des
+        # PDF. Genau daran ginge es schief, wenn nach dem Filtern der erste
+        # Eintrag der ungefilterten Liste genommen wuerde.
+        await tippen("suche")
+        for zeichen in "nordwind":
+            await tippen(zeichen)
+        pruefe("Kundensuche greift", "1 von 2 passen")
+        # ``tab`` erst: Solange der Cursor im Suchfeld steht, nimmt ``enter``
+        # das Feld und nicht die Liste.
+        await tippen("tab", "enter")
         pruefe("Positionen sammeln", "Schritt 2 von 3")
 
         await tippen("enter")  # "Position aus der Preisliste"
         pruefe("Preisliste", "Aufnahme Ton")
-        await tippen("enter")  # erste Leistung
+
+        # Auch die Leistung wird gesucht. "Aufnahme Ton" ist die erste der
+        # fuenf, das taugt als Probe nicht — der Filter muesste gar nichts
+        # aendern. Gesucht wird deshalb nach der dritten, damit ein Fehler
+        # sofort auffaellt.
+        await tippen("suche")
+        for zeichen in "sprecher":
+            await tippen(zeichen)
+        pruefe("Leistungssuche greift", "1 von 5 passen")
+        await tippen("tab", "enter")  # siehe oben: erst aus dem Suchfeld
         pruefe("Position eintragen", "Bezeichnung")
 
         # Die Leistung ist schon eingetragen, Menge und Preis stimmen.
         await durch_das_formular(4)
-        pruefe("Position übernommen", "Aufnahme Ton")
+        pruefe("Position übernommen", "Sprecherstimme")
 
         # Rabatt als eigene Position. Die Summe sinkt um genau den Betrag.
         # Nach dem Neuausbau steht der Cursor auf der ersten Position, der
@@ -161,8 +199,8 @@ async def durchlauf() -> int:
         await tippen("end")
         await tippen("enter")  # "Fertig"
         pruefe("Kontrolle", "Schritt 3 von 3")
-        # Die Position wurde mit Menge 1 übernommen: 850 minus 300.
-        pruefe("Summe mit Rabatt", "550,00 €")
+        # Die gesuchte Leistung wurde mit Menge 1 übernommen: 120 minus 300.
+        pruefe("Summe mit Rabatt", "-180,00 €")
 
         await durch_das_formular(4)
         pruefe("Angebot gespeichert", "Gespeichert")
@@ -181,12 +219,22 @@ async def durchlauf() -> int:
             nonlocal_fehler[0] += 1
             print("  FEHLT  PDF im Prüfordner")
 
+        # Der Dateiname traegt den Kundennamen. Damit ist zum ersten Mal
+        # belegt, dass im Dokument der Kunde steht, den man **gesehen** hat —
+        # der Kundenschritt wird gesucht, und ein Index auf die ungefilterte
+        # Liste wuerde hier den falschen Namen schreiben.
+        if geschrieben and "Tonstudio Nordwind" not in geschrieben[0].name:
+            nonlocal_fehler[0] += 1
+            print("  FEHLT  gesuchter Kunde im Angebotsnamen")
+        elif geschrieben:
+            print("  ok     gesuchter Kunde im Angebotsnamen")
+
         # --- Angebot in Rechnung umwandeln. Steht die Auswahl auf einem
         # Angebot, heisst ``r`` abrechnen statt eine neue anfangen.
         await tippen("home")
         await tippen("r")
         pruefe("Umwandlung, Schritt 3", "Schritt 3 von 3")
-        pruefe("Positionen übernommen", "Aufnahme Ton")
+        pruefe("Positionen übernommen", "Sprecherstimme")
         await durch_das_formular(4)
         pruefe("Rechnung gespeichert", "Gespeichert")
 

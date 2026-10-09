@@ -64,6 +64,10 @@ zwei Wochen. Enter genügt.
 **Positionen wählst du aus der Preisliste**, statt sie abzutippen. Wähle dort
 eine Leistung, dann justierst du Menge und Preis.
 
+**Sind viele Kunden oder Leistungen da, suchst du sie**, statt zu blättern.
+In beiden Auswahlen geht das mit `suche`; siehe [Suchen](#suchen). Mit
+wenigen Einträgen ist die Suche unnötig — dann laufst du einfach weiter.
+
 **Vor dem Speichern kommt die Kontrolle**: alle Positionen, der Gesamtbetrag,
 der Brieftext. Erst dann entsteht das Dokument und die PDF, und der Pfad wird
 dir genannt.
@@ -259,7 +263,9 @@ stimmt. Das Programm lässt sich deshalb weigern, eines zu markieren.
 
 ## Suchen
 
-Auf der Kunden- und auf der Dokumentenliste steht oben ein Feld.
+Auf der Kundenliste, auf der Dokumentenliste, bei den offenen Forderungen und
+in den beiden Auswahlen des Editors steht oben ein Feld: **Kunde wählen** und
+**Leistung wählen**.
 
 Es wird gefiltert, während man tippt. Kein Dialog, kein Enter: bei zwanzig
 Kunden will niemand einen Dialog, und bei zweihundert ist die Liste ohne
@@ -269,6 +275,14 @@ Der Begriff darf mitten im Wort stehen, und Groß- und Kleinschreibung spielt
 keine Rolle. Wer `check` tippt, findet *Soundcheck*.
 
 `esc` leert das Feld und zeigt wieder alles.
+
+Um aus dem Suchfeld wieder in die Liste zu kommen, genügt `tab`. `enter`
+wählt nur, wenn der Cursor auch wirklich auf der Liste steht — im Suchfeld
+genommen bestätigt es das Feld und sonst nichts.
+
+In den Auswahlen des Editors sind es genau die Sterne: Wer *Tonstudio
+Nordwind* sucht und dann `tab` `enter` drückt, bekommt den Tonstudio
+Nordwind ins Angebot und nicht den ersten Kunden der Liste.
 
 Auf der Dokumentenliste bleibt die markierte Zeile dieselbe: Wer einen
 Kunden sucht und dann ein Angebot in eine Rechnung umwandelt, wandelt das
