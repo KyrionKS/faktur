@@ -55,6 +55,13 @@ das Menü bleibt bedienbar.
 Das Terminalfenster braucht mindestens 80 Spalten und 24 Zeilen. Ist es
 kleiner, passt das Menü nicht und es sieht abgeschnitten aus.
 
+Passt ein **Formular** nicht vollständig ins Fenster, rollt es. Das Programm
+holt den Rest nach, sobald du mit `Tab` zum nächsten Feld gehst — das Feld, auf
+dem der Cursor steht, ist immer ganz da. Du merkst die unteren Felder also
+nicht erst beim Absenden, sondern dann, wenn du bei ihnen bist. Seit 0.8.1
+läuft das auch bei 20 Zeilen Fensterhöhe; davor wurden die unteren Felder
+abgeschnitten, ohne dass man hinscrollen konnte.
+
 ## So arbeitest du damit
 
 **Die Felder sind vorbelegt.** Wo sich etwas ausrechnen lässt, steht der
