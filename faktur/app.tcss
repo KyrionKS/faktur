@@ -120,9 +120,6 @@ Input {
     padding: 0 0 1 0;
 }
 
-.summe_label {
-    color: $text-muted;
-}
 
 .summe_wert {
     color: #C9B5E3;

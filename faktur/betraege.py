@@ -111,20 +111,6 @@ def menge(wert: float) -> str:
     return text.replace(".", ",")
 
 
-def prozent(wert: float, stellen: int = 1) -> str:
-    """Formatiert einen Prozentsatz.
-
-    Args:
-        wert: Der Anteil, etwa ``19.0`` für 19 Prozent.
-        stellen: Wie viele Nachkommastellen.
-
-    Returns:
-        Der Text, etwa ``19,0 %``.
-    """
-    text = f"{wert:.{stellen}f}"
-    return f"{text.replace('.', ',')} %"
-
-
 def _heute() -> datetime.date:
     """Gibt das heutige Datum zurück."""
     return datetime.date.today()

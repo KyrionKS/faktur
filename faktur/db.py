@@ -371,13 +371,3 @@ def _umziehen_aus(quelle: Path) -> list[str]:
             meldungen.append(f"{name} übernommen")
 
     return meldungen
-
-
-def schliessen(verbindung: sqlite3.Connection) -> None:
-    """Beendet alle offenen Transaktionen und schliesst die Verbindung.
-
-    Args:
-        verbindung: Die zu schliessende Verbindung.
-    """
-    verbindung.commit()
-    verbindung.close()

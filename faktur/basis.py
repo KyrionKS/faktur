@@ -72,7 +72,13 @@ class BasisScreen(Screen[object]):
             Die Kindelemente.
         """
         yield LogoKopf()
-        with VerticalScroll(id="inhalt"):
+        with VerticalScroll(id="inhalt") as inhalt:
+            # Die Bildlaufleiste ist ein Behaelter, keine Bedienung. Ohne
+            # das bekommen ``tab`` und ``shift+tab`` bei jeder Liste einen
+            # Zwischenhalt, an dem nichts passiert — auf *Offene
+            # Forderungen* musste man ihn zweimal nehmen, um ueberhaupt ins
+            # Suchfeld zu kommen.
+            inhalt.can_focus = False
             yield from self.inhalt()
         yield Meldung()
         yield Footer()

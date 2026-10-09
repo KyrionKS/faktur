@@ -62,8 +62,15 @@ faktur/daten/logo.png
 ```
 
 Den Ordner `daten/` legt es beim ersten Start selbst an. Danach die Datei
-hineinlegen, oder über `6` → *Stammdaten* → *Logo* — dann kopiert das
-Programm sie selbst an die richtige Stelle.
+hineinlegen, fertig — das Programm findet sie beim nächsten Start von
+selbst und zeigt unter `7` → *Stammdaten* an, welche Datei es benutzt.
+
+Bis 0.8.2 gab es dort auch den Punkt **Logo**. Der hat die Datei an genau der
+Stelle gesucht, an der er sie hinschreiben wollte, und das Programm beim
+Klick abstürzen lassen. Ein Dateidialog wäre die Alternative gewesen, aber
+Textual bringt keinen mit, der über ein Terminal funktioniert. Der Punkt
+fliegt deshalb raus, statt dass er kaputt bleibt: **die Datei nach
+`daten/logo.png` legen ist der ganze Weg.**
 
 Fehlt das Logo, sagt das Startskript es einmal beim ersten Start.
 

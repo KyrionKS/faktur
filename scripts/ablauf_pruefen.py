@@ -52,7 +52,11 @@ async def durchlauf() -> int:
 
     db_modul.DOKUMENTE = ordner / "Dokumente"
 
-    async with app.run_test(size=(100, 34)) as pilot:
+    # 44 Zeilen, damit der ganze Bildschirm im Bild ist. Mit 34 schob
+    # der Fokus beim Kontrollschirm die Hinweiszeile aus dem Bild, und der
+    # Lauf pruefte an einer Zeile, die der Benutzer in diesem Fenster
+    # schlicht nicht sieht.
+    async with app.run_test(size=(100, 44)) as pilot:
 
         async def tippen(*tasten: str) -> None:
             """Drückt Tasten und wartet, bis das Bild steht.
@@ -147,6 +151,30 @@ async def durchlauf() -> int:
         )
         pruefe("Zweiter Kunde gespeichert", "Tonstudio Nordwind")
 
+        # --- Suchen auf der Kundenliste, und dann benutzen. Das ist der
+        # Fehler, der bis 0.8.2 keiner bemerkt hat: Gefiltert wurden nur
+        # die Zeilen der Tabelle, die Liste selbst blieb ganz. Wer den
+        # zweiten Kunden suchte, sah ihn und bekam den ersten.
+        await tippen("suche")
+        for zeichen in "nordw":
+            await tippen(zeichen)
+        pruefe("Kundensuche auf der Liste", "1 von 2 passen")
+        await tippen("tab")  # aus dem Suchfeld in die Liste
+        await tippen("delete")
+        # Gefragt wird nach dem GESEHENEN Kunden. Steht hier der andere,
+        # wäre beim Bestätigen ein fremder Kunde samt Dokumenten weg.
+        pruefe("Löschen fragt nach dem gesehenen Kunden", "Tonstudio Nordwind")
+        await tippen("n")  # abbrechen
+        # ``suche`` zuerst: Nach der Frage liegt der Cursor auf der Liste,
+        # und ein ``escape`` von dort springt aus dem Bildschirm heraus,
+        # statt das Suchfeld zu leeren.
+        await tippen("suche")
+        await tippen("escape")  # Suchfeld leeren
+        pruefe("Kundenliste wieder voll", "Soundcheck GmbH")
+        # Und wieder aus dem Feld hinaus: Solange der Cursor dort steht,
+        # landet die naechste Zahl im Suchfeld statt im Menue.
+        await tippen("tab")
+
         # --- Angebot bauen
         await tippen("escape")
         await tippen("1")
@@ -240,7 +268,10 @@ async def durchlauf() -> int:
 
         await tippen("escape", "escape")
         await tippen("6")
-        pruefe("Rechnung in der Liste", "Rechnung")
+        # Die Nummer, nicht das Wort "Rechnung": Das steht auch im
+        # Hauptmenue, und damit war diese Pruefung schon auf der falschen
+        # Seite gruen.
+        pruefe("Rechnung in der Liste", "0002")
 
         # --- Preisliste
         await tippen("escape")
@@ -254,7 +285,11 @@ async def durchlauf() -> int:
 
         # Der Brieftext ist mehrzeilig. Das war der Grund für den eigenen
         # Editor: ein einzeiliges Eingabefeld klappt die Absätze zusammen.
-        await tippen("3")
+        # Punkt 2, seit 0.8.2: Der Punkt *Logo* ist weg, und mit ihm eine
+        # Position. Genau solche Zahlen bleiben liegen, wenn man sie nicht
+        # nachsieht — tests/test_menue.py waechtert jetzt ueber alle
+        # Anleitungen, aber nicht ueber dieses Skript.
+        await tippen("2")
         pruefe("Brieftext-Editor", "Text für Angebote")
         pruefe("Zeilennummern", " 1 ")
 
@@ -281,7 +316,7 @@ async def durchlauf() -> int:
         await tippen("escape")
         await tippen("7")
         pruefe("Stammdaten", "Firma und Bank")
-        await tippen("6")
+        await tippen("5")  # auch das ist um eine Position gewandert
         pruefe("Aussehen", "Logogröße")
         pruefe("Absender", "Firmenname")
         pruefe("Fußzeile", "Seitenzahl")
@@ -331,8 +366,25 @@ async def durchlauf() -> int:
         pruefe("Offene Forderungen", "Rechnung")
         pruefe("Summe", "Offen:")
 
+        # Erst suchen, dann markieren. Das ist der Fall, der bis 0.8.2
+        # schiefging: Aus der gefilterten Liste zu zeichnen holte die gerade
+        # bezahlte Rechnung sofort wieder zurueck, und die Liste blieb
+        # stehen, als waere nichts passiert.
+        await tippen("suche")
+        for zeichen in "nordw":
+            await tippen(zeichen)
+        pruefe("Forderungen filtern", "Alle 1 passen")
+        await tippen("tab")
         await tippen("b")
-        pruefe("nach dem Markieren leer", "0 Rechnungen")
+        pruefe("nach dem Markieren leer", "0 gefunden")
+        pruefe("und die Liste ist leer", "Nichts vorhanden")
+
+        # ``suche`` zuerst: Nach dem Markieren liegt der Cursor auf der
+        # Liste, und ein ``escape`` von dort springt aus dem Bildschirm.
+        await tippen("suche")
+        await tippen("escape")  # Suchfeld leeren
+        pruefe("auch ungefiltert leer", "0 Rechnungen")
+        await tippen("tab")  # Fokus zurueck in die Liste
 
         await tippen("escape")
         await tippen("escape")

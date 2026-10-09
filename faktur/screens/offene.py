@@ -20,7 +20,7 @@ from textual.widgets import Static
 
 from faktur import betraege, dateien, offen
 from faktur.basis import BasisScreen
-from faktur.suchen import Suchfeld, SuchZeile, filtern
+from faktur.suchen import Suchfeld, SuchZeile, sichtbar
 from faktur.widgets import Tabelle
 
 
@@ -34,6 +34,7 @@ class OffeneScreen(BasisScreen):
     BINDINGS = [
         Binding("b", "bezahlt", "Als bezahlt markieren", show=True),
         Binding("space", "bezahlt", "Als bezahlt markieren", show=False),
+        Binding("suche", "suchen", "Suchen", show=True),
     ]
 
     def __init__(self, verbindung: sqlite3.Connection) -> None:
@@ -43,6 +44,11 @@ class OffeneScreen(BasisScreen):
             verbindung: Die Datenbankverbindung.
         """
         super().__init__(verbindung)
+        #: Alle offenen Rechnungen, ungefiltert. Die gefilterte Liste steht in
+        #: ``self.posten``. Beide zu vermischen macht die Liste zur
+        #: Einbahnstrasse: Nach dem Filtern ist nichts mehr da, was ein
+        #: Backspace zurueckholen koennte.
+        self.alle_posten: list = []
         self.posten: list = []
         self._suche = ""
 
@@ -77,7 +83,8 @@ class OffeneScreen(BasisScreen):
 
     def aktualisieren(self) -> None:
         """Holt die offenen Rechnungen und zeichnet neu."""
-        self.posten = offen.offene(self.db)
+        self.alle_posten = offen.offene(self.db)
+        self.posten = list(self.alle_posten)
         self._suche = ""
         self._zeichne()
 
@@ -89,6 +96,15 @@ class OffeneScreen(BasisScreen):
         """
         self._suche = begriff
         self._zeichne()
+
+    def action_suchen(self) -> None:
+        """Legt den Cursor ins Suchfeld.
+
+        Bis 0.8.2 stand das Feld auf diesem Bildschirm, und es war nur mit
+        zweimal ``tab`` zu erreichen — ohne dass irgendwo davon die Rede
+        war. Die Suche war damit vorhanden und trotzdem tot.
+        """
+        self.query_one(Suchfeld).focus()
 
     def _zeile(self, posten: object) -> list[str]:
         """Baut die Textzeile einer Rechnung.
@@ -111,24 +127,31 @@ class OffeneScreen(BasisScreen):
         ]
 
     def _zeichne(self) -> None:
-        """Zeichnet die Liste mit dem, was zur Suche passt."""
-        zeilen = [self._zeile(p) for p in self.posten]
-        passend = filtern(zeilen, self._suche)
-        nummern = {zeile[0] for zeile in passend}
+        """Zeichnet die Liste mit dem, was zur Suche passt.
 
-        self.posten = [
-            p for p, z in zip(self.posten, zeilen, strict=True) if z[0] in nummern
-        ]
+        ``self.posten`` wird auf das Ergebnis gesetzt, weil die Aktionen
+        darüber auf die markierte Zeile gehen. Vorher stand hier ein
+        ``filtern`` über die Zeilen und danach ein Rücksprung über die
+        Kennung — zwei Schritte, von denen einer vergessen werden konnte.
+        Genau das ist auf der Kundenliste passiert.
+        """
+        paare = sichtbar(
+            self.alle_posten,
+            [self._zeile(p) for p in self.alle_posten],
+            self._suche,
+        )
+
+        self.posten = [posten for posten, _zeile_ in paare]
 
         tabelle = self.query_one(Tabelle)
-        tabelle.zeilen = [z for z in zeilen if z[0] in nummern]
-        tabelle.index = min(tabelle.index, max(0, len(tabelle.zeilen) - 1))
+        tabelle.zeilen = [zeile for _posten, zeile in paare]
+        tabelle.index = min(tabelle.index, max(0, len(paare) - 1))
         tabelle.refresh()
 
         summe = sum(dateien.summe_von(self.db, posten["id"]) for posten in self.posten)
         self.query_one(SuchZeile).zeige(
-            len(nummern),
-            len(zeilen),
+            len(paare),
+            len(self.alle_posten),
             self._suche,
             "Rechnungen",
             "Rechnung",
@@ -151,6 +174,10 @@ class OffeneScreen(BasisScreen):
         posten = self.posten[tabelle.index]
         offen.als_bezahlt_markieren(self.db, posten["id"], betraege.heute())
 
-        self.posten = offen.offene(self.db)
+        # ``alle_posten`` neu laden, nicht ``posten``: Aus der gefilterten
+        # Liste zu zeichnen hiesse, die gerade Rechnung wieder zu zeigen.
+        # Der Suchbegriff bleibt, sonst waere die Suche nach dem Markieren
+        # weg, ohne dass man sie angeruehrt haette.
+        self.alle_posten = offen.offene(self.db)
         self._zeichne()
         self.meldung(f"Rechnung {posten['nummer']} als bezahlt vermerkt.", gut=True)

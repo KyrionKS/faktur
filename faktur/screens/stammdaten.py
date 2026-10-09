@@ -14,6 +14,7 @@ from textual.widgets import Static
 
 from faktur import einstellungen, texte
 from faktur.basis import BasisScreen
+from faktur.db import STANDARD_LOGO
 from faktur.editor import Brieftext
 from faktur.widgets import Auswahl, Formular
 
@@ -40,11 +41,10 @@ class StammdatenScreen(BasisScreen):
 
     PUNKTE = (
         ("firma", "1", "Firma und Bank", "Anschrift, Kontakt, IBAN"),
-        ("logo", "2", "Logo", "Bilddatei für die PDF wählen"),
-        ("angebot", "3", "Text für Angebote", "Der Brief, der mitgeht"),
-        ("rechnung", "4", "Text für Rechnungen", "Der Brief, der mitgeht"),
-        ("platzhalter", "5", "Platzhalter", "Was das Programm einsetzen kann"),
-        ("aussehen", "6", "Aussehen der PDF", "Größen und was draufsteht"),
+        ("angebot", "2", "Text für Angebote", "Der Brief, der mitgeht"),
+        ("rechnung", "3", "Text für Rechnungen", "Der Brief, der mitgeht"),
+        ("platzhalter", "4", "Platzhalter", "Was das Programm einsetzen kann"),
+        ("aussehen", "5", "Aussehen der PDF", "Größen und was draufsteht"),
     )
 
     def inhalt(self) -> ComposeResult:
@@ -62,7 +62,12 @@ class StammdatenScreen(BasisScreen):
 
         logopfad = einstellungen.logo_pfad(self.db)
         yield Static(
-            "Logo: " + (str(logopfad) if logopfad else "noch keines"),
+            "Logo: "
+            + (
+                str(logopfad)
+                if logopfad
+                else f"noch keines — leg die Datei als {STANDARD_LOGO} ab"
+            ),
             classes="hinweis",
         )
 
@@ -76,8 +81,6 @@ class StammdatenScreen(BasisScreen):
         """
         if aktion == "firma":
             self.app.push_screen(StammdatenFormularScreen(self.db))
-        elif aktion == "logo":
-            self.logo_waehlen()
         elif aktion in ("angebot", "rechnung"):
             self.app.push_screen(BausteinScreen(self.db, aktion))
         elif aktion == "platzhalter":
@@ -86,24 +89,6 @@ class StammdatenScreen(BasisScreen):
             from faktur.screens.aussehen import AussehenScreen
 
             self.app.push_screen(AussehenScreen(self.db))
-
-    def logo_waehlen(self) -> None:
-        """Sucht eine Logo-Datei und übernimmt sie.
-
-        Textual bringt keinen Dateidialog mit, der ohne Zusatzpakete über
-        Terminals funktioniert. Deshalb wird eine übliche Stelle geprüft und
-        der Pfad gefunden, wenn er dort liegt.
-        """
-        from faktur import db
-
-        ziel = db.STANDARD_LOGO
-        if ziel.is_file():
-            einstellungen.logo_uebernehmen(self.db, ziel)
-            self.meldung(f"Logo übernommen: {ziel}")
-        else:
-            self.meldung(
-                f"Lege dein Logo als {ziel} ab, dann wird es gefunden.", gut=False
-            )
 
 
 class StammdatenFormularScreen(BasisScreen):

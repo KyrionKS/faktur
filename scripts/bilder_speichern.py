@@ -360,8 +360,8 @@ FAELLE = (
     ("06_dokumente", ["6"], _mit_angebot, "DokumentenScreen"),
     ("07_umwandlung", ["6", "r"], _mit_angebot, "KontrolleScreen"),
     ("08_positionen", ["1", "enter"], _mit_positionen, "PositionenScreen"),
-    ("09_aussehen", ["7", "6"], None, "AussehenScreen"),
-    ("10_aussehen_rechnung", ["7", "6", "home", "right"], None, "AussehenScreen"),
+    ("09_aussehen", ["7", "5"], None, "AussehenScreen"),
+    ("10_aussehen_rechnung", ["7", "5", "home", "right"], None, "AussehenScreen"),
     ("11_offene", ["5"], _mit_rechnung, "OffeneScreen"),
     ("12_kundensuche", ["1", "suche", "check"], _mit_kunden, "EditorScreen"),
     # "p" fuer "Position aus der Preisliste" ("+" laesst sich nicht senden).

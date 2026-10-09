@@ -17,6 +17,7 @@ mit :func:`faktur.db.verbinden` in ein temporäres Verzeichnis.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import subprocess
 import sys
@@ -116,6 +117,14 @@ def test_jeder_test_der_ein_logo_ablegt_sagt_wohin() -> None:
 
     Ohne den letzten Parameter landet das Bild im Datenordner des
     Benutzers — das hat schon zweimal das Logo zerstört.
+
+    Gesucht wird mit ``ast`` und nicht mit einer Zeilensuche: Ein Test,
+    der den Namen ``logo_uebernehmen`` nur in einer Fehlermeldung erwaehnt,
+    ist kein Aufruf. Bei der Suche im Text war genau das die Ursache fuer
+    Fehlalarme.
+
+    Returns:
+        Nichts.
     """
     verdächtig: list[str] = []
 
@@ -124,20 +133,20 @@ def test_jeder_test_der_ein_logo_ablegt_sagt_wohin() -> None:
             # Diese Datei nennt den Aufruf in ihrer Beschreibung.
             continue
 
-        zeilen = datei.read_text(encoding="utf-8").splitlines()
-        for nummer, zeile in enumerate(zeilen):
-            if "logo_uebernehmen" not in zeile or zeile.lstrip().startswith("#"):
+        baum = ast.parse(datei.read_text(encoding="utf-8"))
+        for knoten in ast.walk(baum):
+            if not isinstance(knoten, ast.Call):
                 continue
-
-            # Der letzte Parameter des Aufrufs muss das Ziel sein. Er kann
-            # in der nächsten Zeile stehen.
-            abschnitt = " ".join(zeilen[nummer : nummer + 3])
-            abschnitt = abschnitt.split("logo_uebernehmen", 1)[1]
-
-            # Es zählt, dass nach dem Bildpfad ein zweites Argument steht.
-            argumente = abschnitt.split(")", 1)[0]
-            if "," not in argumente:
-                verdächtig.append(f"{datei.relative_to(WURZEL)}:{nummer + 1}")
+            funktion = knoten.func
+            name = (
+                funktion.attr
+                if isinstance(funktion, ast.Attribute)
+                else getattr(funktion, "id", "")
+            )
+            if name != "logo_uebernehmen":
+                continue
+            if len(knoten.args) + len(knoten.keywords) < 3:
+                verdächtig.append(f"{datei.relative_to(WURZEL)}:{knoten.lineno}")
 
     assert verdächtig == [], (
         "Diese Stellen legen ein Logo im echten Datenordner ab. Sie brauchen "

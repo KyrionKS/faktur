@@ -22,6 +22,14 @@ import pytest
 from faktur import dateien
 from faktur.suchen import passt
 
+#: Der Bildschirm, um den es hier geht.
+QUELLE = (
+    __import__("pathlib").Path(__file__).resolve().parents[1]
+    / "faktur"
+    / "screens"
+    / "dokumente.py"
+).read_text(encoding="utf-8")
+
 #: Zwei Leistungen, die auf dem Papier gleich aussehen.
 DOPPELT_A = ("Mischung und Mastering", "Stunde", "950,00 €")
 DOPPELT_B = ("Mischung und Mastering", "Stunde", "950,00 €")
@@ -150,32 +158,26 @@ def test_das_programm_hat_keine_sperre_gegen_doppelte_leistungen(
 # ------------------------------------------------------- die Bildschirme
 
 
-def test_der_kundenschritt_trägt_die_kennung_mit() -> None:
-    """Warum dort keine Index-Falle droht.
+def test_der_kundenschritt_traegt_die_kennung_mit() -> None:
+    """Auch im Editor wird die Kennung aus dem Datensatz geholt.
 
-    Jede Zeile der Kundenauswahl beginnt mit der Kennung des Kunden, und
-    ``Auswahl`` gibt genau die Kennung der gewaehlten Zeile weiter. Ein
-    Filter, der die Zeilen kuerzt, verschleppt die Kennung mit — es gibt
-    keine Stelle, an der ein Index zeigen koennte auf eine Liste, die gar
-    nicht gezeichnet wird.
+    Die Zeile, die der Auswahl gegeben wird, traegt die Kennung des Kunden
+    an erster Stelle. Nach dem Filtern wird sie neu gesetzt — aus dem
+    Datensatz, nicht aus der Zeile. So kann sich die Anzeige aendern, ohne
+    dass ein Tastendruck ploetzlich jemand anderen meint.
 
     Args:
         None
     """
-    from faktur.widgets import Auswahl
+    quelle = QUELLE
 
-    quelle = (
-        __import__("pathlib").Path(__file__).resolve().parents[1]
-        / "faktur"
-        / "screens"
-        / "dokumente.py"
-    ).read_text(encoding="utf-8")
-
-    # Die Kennung ist das erste Feld jeder Zeile.
     assert 'str(kunde["id"]),\n' in quelle, (
         "Die Kundenauswahl traegt die Kennung nicht mehr am Anfang der Zeile."
     )
-    assert Auswahl is not None
+    assert "for neu, (kunde, zeile) in enumerate(paare, 1)" in quelle, (
+        "Die Nummer wird nicht mehr aus dem Paar von Datensatz und Zeile "
+        "gewonnen. Damit haengt die Tastenzuordnung an der Anzeige."
+    )
 
 
 def test_der_leistungsschritt_filtert_ueber_indizes() -> None:
@@ -184,16 +186,10 @@ def test_der_leistungsschritt_filtert_ueber_indizes() -> None:
     Args:
         None
     """
-    quelle = (
-        __import__("pathlib").Path(__file__).resolve().parents[1]
-        / "faktur"
-        / "screens"
-        / "dokumente.py"
-    ).read_text(encoding="utf-8")
+    quelle = QUELLE
 
-    assert "enumerate(zeilen)" in quelle
-    assert "self.sichtbar[event.zeile]" in quelle
     assert "self.leistungen[event.zeile]" not in quelle, (
         "Hier wird noch ueber die vollstaendige Liste indexiert. Nach dem "
         "Filtern waere das die falsche Leistung."
     )
+    assert "self.sichtbar[event.zeile]" in quelle
