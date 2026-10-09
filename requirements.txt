@@ -3,7 +3,13 @@
 # Bewusst ohne pytest und ruff: die gehoeren in requirements-dev.txt.
 # Je weniger hier steht, desto kleiner wird das fertige Programm, und
 # desto weniger kann beim Bauen schiefgehen.
+#
+# ``rich`` wird dreimal direkt importiert (``Style``, ``Text``) und stand
+# bis 0.8.2 nicht hier. Es lief nur, weil Textual es zufaellig mitzieht —
+# ohne diese Zeile haette der erste, der Textual aufruestet, ein
+# ``ModuleNotFoundError`` bekommen. tests/test_skripte.py waechtert das.
 
 pillow==12.3.0
 reportlab==5.0.1
+rich==15.0.0
 textual==8.2.8
