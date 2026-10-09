@@ -161,7 +161,9 @@ class AussehenScreen(BasisScreen):
             return
 
         try:
-            pfad = pdf.erzeugen(self.db, voll, db.DOKUMENTE / dateien.dateiname(voll))
+            pfad = pdf.erzeugen(
+                self.db, voll, db.DOKUMENTE / dateien.dateiname(voll, voll["art"])
+            )
         except Exception as grund:  # noqa: BLE001
             self.meldung(f"Konnte nicht schreiben: {grund}", gut=False)
             return
