@@ -16,9 +16,15 @@ jeder Bildschirm, der eine hat, benutzt sie.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from typing import TypeVar
 
 from textual.binding import Binding
 from textual.widgets import Input, Static
+
+#: Der Datensatz, zu dem eine Zeile gehoert. Ein Kunde, ein Dokument — was
+#: auch immer die Liste gerade zeigt. Nur fuer die Typangabe, damit ein
+#: Bildschirm nicht um ein cast() herumkommt.
+D = TypeVar("D")
 
 
 def passt(zeile: Sequence[str], begriff: str) -> bool:
@@ -47,6 +53,9 @@ def passt(zeile: Sequence[str], begriff: str) -> bool:
 def filtern(zeilen: Sequence[Sequence[str]], begriff: str) -> list[tuple[str, ...]]:
     """Hält nur die Zeilen, die zum Begriff passen.
 
+    Nur für Bildschirme, die außer der Zeile nichts brauchen. Wer auf der
+    Zeile einen Rücksprung in die Datenbank macht, nimmt :func:`sichtbar`.
+
     Args:
         zeilen: Alle Zeilen.
         begriff: Was gesucht wird.
@@ -58,6 +67,53 @@ def filtern(zeilen: Sequence[Sequence[str]], begriff: str) -> list[tuple[str, ..
         return [tuple(z) for z in zeilen]
 
     return [tuple(z) for z in zeilen if passt(z, begriff)]
+
+
+def sichtbar(
+    datensaetze: Sequence[D], zeilen: Sequence[Sequence[str]], begriff: str
+) -> list[tuple[D, tuple[str, ...]]]:
+    """Hält nur, was zum Begriff passt — Datensatz und Zeile zusammen.
+
+    Die Liste zeigt Zeilen, und wenn man eine Zeile anklickt, braucht der
+    Bildschirm den Datensatz dahinter. Beides muss sich nach dem Filtern
+    noch an derselben Stelle befinden, sonst öffnet man den **falschen**.
+
+    Genau das ist bis 0.8.2 auf der Kundenliste passiert: Dort wurden nur
+    die Zeilen gefiltert, die Kundenliste selbst blieb ganz. Wer *Zeta
+    Tonwerk* suchte, sah *Zeta Tonwerk*, öffnete *Alpha Klangstudio* — und
+    konnte, mit derselben Tastendruckfolge, einen fremden Kunden samt
+    Dokumenten löschen.
+
+    Deshalb wird hier **über die Indizes** gefiltert und nicht über die
+    Zeilenwerte. Zwei Kunden können denselben Namen haben, zwei Leistungen
+    dieselbe Bezeichnung und denselben Preis. Ein Vergleich nach Werten
+    käme bei zwei gleichen Zeilen nicht zu einem Ergebnis, und ein
+    Rücksprung über eine Spalte — Kennung oder Nummer — wäre nur so lange
+    richtig, wie diese Spalte eindeutig ist. Beides hat schon Fehler gemacht.
+
+    Args:
+        datensaetze: Die Datensätze in ihrer alten Reihenfolge.
+        zeilen: Die Textzeilen dazu, in derselben Reihenfolge.
+        begriff: Was gesucht wird.
+
+    Returns:
+        Die passenden Paare aus Datensatz und Zeile, in alter Reihenfolge.
+
+    Raises:
+        ValueError: Wenn die beiden Listen nicht gleich lang sind. Sie
+            müssen sich decken, sonst stimmt der Rücksprung nicht mehr.
+    """
+    if len(datensaetze) != len(zeilen):
+        raise ValueError(
+            f"Datensätze und Zeilen passen nicht zusammen: "
+            f"{len(datensaetze)} gegen {len(zeilen)}"
+        )
+
+    return [
+        (datensatz, tuple(zeile))
+        for datensatz, zeile in zip(datensaetze, zeilen, strict=True)
+        if passt(zeile, begriff)
+    ]
 
 
 class Suchfeld(Input):

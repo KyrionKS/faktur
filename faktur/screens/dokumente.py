@@ -15,7 +15,7 @@ from textual.widgets import Static
 
 from faktur import betraege, dateien, db, pdf
 from faktur.basis import BasisScreen
-from faktur.suchen import Suchfeld, SuchZeile, filtern, passt
+from faktur.suchen import Suchfeld, SuchZeile, sichtbar
 from faktur.widgets import Auswahl, Formular, Tabelle
 
 #: Die Felder des Dokumentkopfs.
@@ -166,28 +166,20 @@ class DokumentenScreen(BasisScreen):
         zu loeschen. Der Index der Tabelle muss sich deshalb auf dieselbe
         Liste beziehen, die gezeichnet wird — sonst wuerde man beim Filtern
         das falsche Dokument nehmen.
-
-        Gefiltert wird ueber die Nummer, nicht ueber den ganzen Zeilentext:
-        Die Nummer ist eindeutig, und ein Vergleich nach Zeilenwerten waere
-        zerbrechlich.
         """
-        zeilen = [self._zeile(d) for d in self.dokumente]
-        passend = filtern(zeilen, self._suche)
-        nummern = {zeile[1] for zeile in passend}
+        paare = sichtbar(
+            self.dokumente, [self._zeile(d) for d in self.dokumente], self._suche
+        )
 
-        self.sichtbar = [
-            dokument
-            for dokument, zeile in zip(self.dokumente, zeilen, strict=True)
-            if zeile[1] in nummern
-        ]
+        self.sichtbar = [dokument for dokument, _zeile_ in paare]
 
         tabelle = self.query_one(Tabelle)
-        tabelle.zeilen = [zeile for zeile in zeilen if zeile[1] in nummern]
-        tabelle.index = min(tabelle.index, max(0, len(tabelle.zeilen) - 1))
+        tabelle.zeilen = [zeile for _dokument, zeile in paare]
+        tabelle.index = min(tabelle.index, max(0, len(paare) - 1))
         tabelle.refresh()
 
         self.query_one(SuchZeile).zeige(
-            len(nummern), len(zeilen), self._suche, "Dokumente", "Dokument"
+            len(paare), len(self.dokumente), self._suche, "Dokumente", "Dokument"
         )
 
     def action_suchen(self) -> None:
@@ -379,10 +371,15 @@ class EditorScreen(BasisScreen):
         Und nur wenn es ueberhaupt eine Liste gibt: Ohne Kunden liefert
         :meth:`inhalt` einen Hinweis statt einer Auswahl, und wer trotzdem
         zeichnen will, stoesst auf einen Bildschirm ohne Auswahl.
+
+        ``start_fokus`` wird hier **nicht** gerufen: ``BasisScreen`` tut das
+        in seinem eigenen ``on_mount``, und Textual ruft die Handler beider
+        Klassen auf. Bis 0.8.2 stand beides hier, und beim Umwandeln eines
+        Angebots schoben sich deshalb zwei Kontrollbildschirme auf den
+        Stapel — der zweite davon schluckte jede ``esc``-Taste.
         """
         if self.kunden:
             self._suche_anwenden()
-        self.start_fokus()
 
     def _suche_geaendert(self, begriff: str) -> None:
         """Sucht weiter, während getippt wird.
@@ -413,14 +410,18 @@ class EditorScreen(BasisScreen):
             )
             for nummer, kunde in enumerate(self.kunden, start=1)
         ]
-        passend = filtern(zeilen, self._suche)
+        paare = sichtbar(self.kunden, zeilen, self._suche)
 
         # Die Nummer wird auf die sichtbare Zeile gezogen, nicht mit
         # geschleppt: Die Zahl vor dem Punkt ist hier ein Tastenkuerzel und
         # kein Rang.
+        #
+        # Die Kennung kommt aus dem Datensatz und nicht aus der Zeile. So
+        # kann die Anzeige sich aendern, ohne dass ein Tastendruck plötzlich
+        # jemand anderen meint.
         punkte = tuple(
-            (schluessel, str(neu), titel, erklaerung)
-            for neu, (schluessel, _alt, titel, erklaerung) in enumerate(passend, 1)
+            (str(kunde["id"]), str(neu), zeile[2], zeile[3])
+            for neu, (kunde, zeile) in enumerate(paare, 1)
         )
 
         auswahl = self.query(Auswahl)
@@ -432,7 +433,7 @@ class EditorScreen(BasisScreen):
         liste.refresh()
 
         self.query_one(SuchZeile).zeige(
-            len(passend), len(zeilen), self._suche, "Kunden", "Kunde"
+            len(paare), len(zeilen), self._suche, "Kunden", "Kunde"
         )
 
     def start_fokus(self) -> None:
@@ -713,13 +714,13 @@ class LeistungAuswahlScreen(BasisScreen):
         )
 
     def on_mount(self) -> None:
-        """Zeichnet die Liste und legt den Fokus.
+        """Zeichnet die Liste mit dem, was zur Suche passt.
 
         Siehe die gleiche Bemerkung beim EditorScreen: Yield ist ein
-        Generator, und die Widgets sind noch nicht einghaengt.
+        Generator, und die Widgets sind noch nicht einghaengt. Und
+        ``start_fokus`` ruft ``BasisScreen`` selbst.
         """
         self._suche_anwenden()
-        self.start_fokus()
 
     def _suche_geaendert(self, begriff: str) -> None:
         """Sucht weiter, während getippt wird.
@@ -740,19 +741,17 @@ class LeistungAuswahlScreen(BasisScreen):
         Vergleich nach Zeilenwerten brächte dann nicht zu einem Ergebnis.
         """
         zeilen = [self._zeile(leistung) for leistung in self.leistungen]
-        nummern = [
-            nummer for nummer, zeile in enumerate(zeilen) if passt(zeile, self._suche)
-        ]
+        paare = sichtbar(self.leistungen, zeilen, self._suche)
 
-        self.sichtbar = [self.leistungen[nummer] for nummer in nummern]
+        self.sichtbar = [leistung for leistung, _zeile_ in paare]
 
         tabelle = self.query_one(Tabelle)
-        tabelle.zeilen = [zeilen[nummer] for nummer in nummern]
-        tabelle.index = min(tabelle.index, max(0, len(nummern) - 1))
+        tabelle.zeilen = [zeile for _leistung, zeile in paare]
+        tabelle.index = min(tabelle.index, max(0, len(paare) - 1))
         tabelle.refresh()
 
         self.query_one(SuchZeile).zeige(
-            len(nummern), len(zeilen), self._suche, "Leistungen", "Leistung"
+            len(paare), len(zeilen), self._suche, "Leistungen", "Leistung"
         )
 
     def action_suchen(self) -> None:
