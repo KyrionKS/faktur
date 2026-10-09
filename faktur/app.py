@@ -42,7 +42,7 @@ class MenueScreen(BasisScreen):
         ("leistungen", "4", "Leistungen", "Die Preisliste pflegen"),
         ("offen", "5", "Offene Forderungen", "Was noch nicht bezahlt ist"),
         ("dokumente", "6", "Dokumente", "Angebote und Rechnungen durchsehen"),
-        ("stammdaten", "7", "Stammdaten", "Firma, Bank, Logo, Brieftexte"),
+        ("stammdaten", "7", "Stammdaten", "Firma, Bank, Brieftexte, PDF-Aussehen"),
         ("pdf", "8", "PDF neu schreiben", "Ein Dokument noch einmal ausgeben"),
         ("ordner", "9", "Rechnungsordner öffnen", "Den Ordner mit den PDF zeigen"),
         ("quit", "q", "Beenden", "Das Programm verlassen"),
@@ -55,7 +55,7 @@ class MenueScreen(BasisScreen):
             Die Kindelemente.
         """
         if not einstellungen.vollstaendig(self.db):
-            yield Static("Stammdaten fehlen — Punkt 6", id="hinweis")
+            yield Static("Stammdaten fehlen — Punkt 7", id="hinweis")
         yield Auswahl(self.PUNKTE, self.auswahl)
 
     def action_nichts(self) -> None:
