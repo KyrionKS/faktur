@@ -256,23 +256,6 @@ Angebote stehen nie in dieser Liste. Ein Angebot wird nicht in Rechnung
 gestellt, und ein als bezahlt markiertes Angebot wäre eine Angabe, die nicht
 stimmt. Das Programm lässt sich deshalb weigern, eines zu markieren.
 
-## Sichern
-
-Punkt `9`. Kopiert den Ordner `daten/` in einen Ordner `Sicherung` neben dem
-Programm, mit Datum und Uhrzeit im Namen.
-
-`daten/` ist der ganze Bestand: Kunden, Leistungen, jedes Angebot, jede
-Rechnung und die PDF dazu. Auf einer Platte, ohne Kopie, ist irgendwann
-alles weg — und bei einem Angebot, das schon beim Kunden liegt, gibt es kein
-Zurück: Die Nummer steht gedruckt auf einem Dokument, das niemandem mehr
-gehört.
-
-Gesichert wird **kopiert, nicht verschoben**. Der Ordner bleibt, wo er ist,
-und die Kopie ist etwas, das man jederzeit wegwerfen kann.
-
-Die zehn neuesten Sicherungen bleiben liegen. Welche als nächste anstehen,
-steht in der Liste dabei — gelöscht wird nichts ohne ausdrücklichen Wunsch.
-
 ## Suchen
 
 Auf der Kunden- und auf der Dokumentenliste steht oben ein Feld.

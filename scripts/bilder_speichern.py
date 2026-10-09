@@ -119,16 +119,26 @@ def zeichnen(app: FakturApp, ziel: Path) -> Path:
     return ziel
 
 
-async def aufnehmen(befehle: list[str], name: str, vorbereiten: object = None) -> Path:
+async def aufnehmen(
+    befehle: list[str],
+    name: str,
+    vorbereiten: object = None,
+    erwartet: str = "",
+) -> Path:
     """Startet die App, drückt Tasten und schreibt ein Bild.
 
     Args:
         befehle: Die Tasten in Reihenfolge.
         name: Der Name der Datei ohne Endung.
         vorbereiten: Eine Funktion, die vor dem ersten Tastendruck läuft.
+        erwartet: Der Name des Bildschirms, der danach offen sein muss.
 
     Returns:
         Der Pfad des Bildes.
+
+    Raises:
+        AssertionError: Wenn ein anderer Bildschirm offen ist als der, für
+            den das Bild benannt ist.
     """
     with tempfile.TemporaryDirectory() as ordner:
         app = FakturApp(Path(ordner) / "bild.db")
@@ -140,6 +150,16 @@ async def aufnehmen(befehle: list[str], name: str, vorbereiten: object = None) -
             for taste in befehle:
                 await pilot.press(taste)
                 await pilot.pause()
+
+            if erwartet:
+                offen = type(app.screen).__name__
+                assert offen == erwartet, (
+                    f"{name}: Nach den Tasten {befehle} ist {offen} offen, "
+                    f"erwartet wurde {erwartet}. Die Nummer im Menü hat sich "
+                    "verschoben, und das Bild würde unter dem falschen "
+                    "Namen gespeichert."
+                )
+
             return zeichnen(app, ZIEL / f"{name}.png")
 
 
@@ -174,6 +194,46 @@ async def _mit_angebot(app: FakturApp, pilot: object) -> None:
     )
 
 
+async def _mit_rechnung(app: FakturApp, pilot: object) -> None:
+    """Legt zwei offene Rechnungen an.
+
+    Zwei, damit die Liste etwas zu zeigen hat und nicht nur einen leeren
+    Rahmen. Für den Bildschirm *Offene Forderungen* nötig: Dort steht ein
+    Angebot nie, weil es nicht in Rechnung gestellt wird.
+
+    Args:
+        app: Die laufende App.
+        pilot: Die Teststeuerung von Textual.
+    """
+    from faktur import betraege, dateien
+
+    kunde_id = dateien.kunde_speichern(app.db, {"firma": "Soundcheck GmbH"})
+    leistung = dateien.leistungen(app.db)[0]
+
+    for nummer, (menge, faellig) in enumerate(
+        (("2", betraege.plus_tage(-20)), ("1", betraege.plus_tage(20))), start=1
+    ):
+        dateien.dokument_speichern(
+            app.db,
+            {
+                "art": "rechnung",
+                "nummer": f"000{nummer}",
+                "kunde_id": kunde_id,
+                "datum": "06.10.2026",
+                "faellig": faellig,
+            },
+            [
+                {
+                    "leistung_id": leistung["id"],
+                    "bezeichnung": leistung["bezeichnung"],
+                    "menge": menge,
+                    "einheit": leistung["einheit"],
+                    "preis": "850",
+                }
+            ],
+        )
+
+
 async def _mit_positionen(app: FakturApp, pilot: object) -> None:
     """Legt einen Kunden und ein Angebot mit Rabatt an.
 
@@ -206,18 +266,31 @@ async def _mit_positionen(app: FakturApp, pilot: object) -> None:
     )
 
 
-#: Welche Bildschirme aufgenommen werden: Name, Tasten, Vorbereitung.
+#: Welche Bildschirme aufgenommen werden: Name, Tasten, Vorbereitung,
+#: und der Bildschirm, der danach offen sein muss.
+#:
+#: Das vierte Feld ist nicht hübsch, sondern nötig. Beim Umnummerieren des
+#: Hauptmenüs in 0.6 blieben hier die alten Zahlen stehen, und fortan
+#: speicherte das Skript Bildschirme unter fremden Namen: Das Bild
+#: ``06_dokumente`` zeigte die offenen Forderungen, und niemand hat es
+#: gemerkt, weil ein Bild mit Suchleiste und Liste nach wie vor plausibel
+#: aussah.
+#:
+#: Deshalb steht der Bildschirm, der erwartet wird, direkt daneben, und
+#: :func:`aufnehmen` prüft ihn. Falsche Nummer, falsches Bild, deutliche
+#: Meldung.
 FAELLE = (
-    ("01_menue", [], None),
-    ("02_stammdaten", ["6"], None),
-    ("03_brieftext", ["6", "3"], None),
-    ("04_kunden", ["3"], _mit_angebot),
-    ("05_leistungen", ["4"], None),
-    ("06_dokumente", ["5"], _mit_angebot),
-    ("07_umwandlung", ["5", "r"], _mit_angebot),
-    ("08_positionen", ["1", "enter"], _mit_positionen),
-    ("09_aussehen", ["6", "6"], None),
-    ("10_aussehen_rechnung", ["6", "6", "home", "right"], None),
+    ("01_menue", [], None, "MenueScreen"),
+    ("02_stammdaten", ["7"], None, "StammdatenScreen"),
+    ("03_brieftext", ["7", "3"], None, "BausteinScreen"),
+    ("04_kunden", ["3"], _mit_angebot, "KundenListeScreen"),
+    ("05_leistungen", ["4"], None, "LeistungenScreen"),
+    ("06_dokumente", ["6"], _mit_angebot, "DokumentenScreen"),
+    ("07_umwandlung", ["6", "r"], _mit_angebot, "KontrolleScreen"),
+    ("08_positionen", ["1", "enter"], _mit_positionen, "PositionenScreen"),
+    ("09_aussehen", ["7", "6"], None, "AussehenScreen"),
+    ("10_aussehen_rechnung", ["7", "6", "home", "right"], None, "AussehenScreen"),
+    ("11_offene", ["5"], _mit_rechnung, "OffeneScreen"),
 )
 
 
@@ -227,8 +300,8 @@ async def main() -> None:
     Returns:
         Nichts. Schreibt nach stdout.
     """
-    for name, befehle, vorbereiten in FAELLE:
-        pfad = await aufnehmen(befehle, name, vorbereiten)
+    for name, befehle, vorbereiten, erwartet in FAELLE:
+        pfad = await aufnehmen(befehle, name, vorbereiten, erwartet)
         print(f"  {pfad.name:<22} {pfad.stat().st_size:>7} Bytes")
 
 
