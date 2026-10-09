@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
+from textual.keys import KEY_TO_UNICODE_NAME, Keys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -34,6 +35,41 @@ RAND = 16
 
 #: Die Breite einer Zeichenzelle.
 ZELLE = 10
+
+#: Die Namen, die Textual als **eine** Taste versteht.
+#:
+#: ``escape``, ``enter``, ``home`` und so weiter.
+TASTENNAMEN = {name.value for name in Keys} | set(KEY_TO_UNICODE_NAME)
+
+
+def tasten(screen: object, befehl: str) -> list[str]:
+    """Zerlegt einen Eintrag der Fallliste in echte Tastendrücke.
+
+    Textual erwartet einzelne Tasten. Ein Wort wie ``"check"`` wird als
+    Tastenname nachgeschlagen, nicht gefunden — und es passiert einfach
+    nichts, ohne jede Fehlermeldung. Die Fallliste bleibt trotzdem lesbar,
+    weil hier entschieden wird.
+
+    Die Frage wird **dem offenen Bildschirm** gestellt, nicht einer Liste
+    im Skript: ``suche`` ist eine Taste des Programms, ``check`` ist es
+    nicht, und beides sind fünf Buchstaben. Nur der Bildschirm weiß, was
+    eine Taste ist — die Tastenbelegung wechselt mit jeder Seite.
+
+    Args:
+        screen: Der gerade offene Bildschirm.
+        befehl: Ein Eintrag aus der Fallliste.
+
+    Returns:
+        Die Tasten in der Reihenfolge, in der sie zu drücken sind.
+    """
+    if befehl in TASTENNAMEN:
+        return [befehl]
+
+    belegung = screen._merged_bindings.key_to_bindings
+    if befehl in belegung:
+        return [befehl]
+
+    return list(befehl)
 
 
 def _farbe(angabe: object, standard: tuple[int, int, int]) -> tuple[int, int, int]:
@@ -147,9 +183,10 @@ async def aufnehmen(
             if vorbereiten is not None:
                 await vorbereiten(app, pilot)  # type: ignore[operator]
                 await pilot.pause()
-            for taste in befehle:
-                await pilot.press(taste)
-                await pilot.pause()
+            for befehl in befehle:
+                for einzelne in tasten(app.screen, befehl):
+                    await pilot.press(einzelne)
+                    await pilot.pause()
 
             if erwartet:
                 offen = type(app.screen).__name__
@@ -234,6 +271,39 @@ async def _mit_rechnung(app: FakturApp, pilot: object) -> None:
         )
 
 
+async def _mit_kunden(app: FakturApp, pilot: object) -> None:
+    """Legt mehrere Kunden an, damit die Suche etwas zu zeigen hat.
+
+    Bei drei Kunden sieht man nichts. Bei sieben schon.
+
+    Args:
+        app: Die laufende App.
+        pilot: Die Teststeuerung von Textual.
+    """
+    from faktur import dateien
+
+    for nummer, firma in enumerate(
+        (
+            "Soundcheck GmbH",
+            "NeunUndNeun Film",
+            "Tonstudio Hamburg",
+            "CHECK Gesellschaft",
+            "Buchhandlung am Markt",
+            "Radio Nordfunk",
+            "Kamerawerkstatt Süd",
+        ),
+        start=1,
+    ):
+        dateien.kunde_speichern(
+            app.db,
+            {
+                "firma": firma,
+                "ansprechpartner": f"Ansprechpartner {nummer}",
+                "ort": f"Ort {nummer}",
+            },
+        )
+
+
 async def _mit_positionen(app: FakturApp, pilot: object) -> None:
     """Legt einen Kunden und ein Angebot mit Rabatt an.
 
@@ -291,6 +361,14 @@ FAELLE = (
     ("09_aussehen", ["7", "6"], None, "AussehenScreen"),
     ("10_aussehen_rechnung", ["7", "6", "home", "right"], None, "AussehenScreen"),
     ("11_offene", ["5"], _mit_rechnung, "OffeneScreen"),
+    ("12_kundensuche", ["1", "suche", "check"], _mit_kunden, "EditorScreen"),
+    # "p" fuer "Position aus der Preisliste" ("+" laesst sich nicht senden).
+    (
+        "13_leistungssuche",
+        ["1", "1", "p", "suche", "m"],
+        _mit_kunden,
+        "LeistungAuswahlScreen",
+    ),
 )
 
 
