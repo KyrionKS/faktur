@@ -15,7 +15,7 @@ from textual.widgets import Static
 
 from faktur import betraege, dateien, db, pdf
 from faktur.basis import BasisScreen
-from faktur.suchen import Suchfeld, SuchZeile, filtern
+from faktur.suchen import Suchfeld, SuchZeile, filtern, passt
 from faktur.widgets import Auswahl, Formular, Tabelle
 
 #: Die Felder des Dokumentkopfs.
@@ -318,6 +318,8 @@ class EditorScreen(BasisScreen):
     ist ein eigener Screen, damit ``esc`` genau eine Ebene zurückgeht.
     """
 
+    BINDINGS = [Binding("suche", "suchen", "Suchen", show=True)]
+
     def __init__(
         self,
         verbindung: sqlite3.Connection,
@@ -342,6 +344,8 @@ class EditorScreen(BasisScreen):
         self.positionen: list[dict[str, str | float | int | None]] = positionen or []
         self.direkt = direkt
         self._titel = "Angebot" if art == "angebot" else "Rechnung"
+        self.kunden: list = []
+        self._suche = ""
 
     def inhalt(self) -> ComposeResult:
         """Baut die Auswahl des Kunden.
@@ -349,27 +353,87 @@ class EditorScreen(BasisScreen):
         Yields:
             Die Kindelemente.
         """
+        self.kunden = dateien.kunden(self.db, nur_aktive=True)
         yield Static(
             f"{self._titel} — Schritt 1 von 3: Kunde wählen.", classes="hinweis"
         )
-        kunden = dateien.kunden(self.db, nur_aktive=True)
-        if not kunden:
+
+        if not self.kunden:
             yield Static(
                 "Es gibt noch keine Kunden. Lege zuerst einen an.",
                 classes="hinweis",
             )
             return
 
-        punkte = tuple(
+        yield Suchfeld(self._suche_geaendert)
+        yield SuchZeile(id="hinweis")
+        yield Auswahl((), self.kunde_gewaehlt)
+
+    def on_mount(self) -> None:
+        """Zeichnet die Liste und legt den Fokus.
+
+        Nicht schon in :meth:`inhalt`: Yield ist ein Generator, und waehrend
+        er laeuft, sind die Widgets noch nicht einghaengt. Wer da schon
+        ``query_one`` ruft, bekommt eine leere Liste zurueck.
+
+        Und nur wenn es ueberhaupt eine Liste gibt: Ohne Kunden liefert
+        :meth:`inhalt` einen Hinweis statt einer Auswahl, und wer trotzdem
+        zeichnen will, stoesst auf einen Bildschirm ohne Auswahl.
+        """
+        if self.kunden:
+            self._suche_anwenden()
+        self.start_fokus()
+
+    def _suche_geaendert(self, begriff: str) -> None:
+        """Sucht weiter, während getippt wird.
+
+        Args:
+            begriff: Der Text im Suchfeld.
+        """
+        self._suche = begriff
+        self._suche_anwenden()
+
+    def _suche_anwenden(self) -> None:
+        """Zeichnet die Liste mit dem, was zur Suche passt.
+
+        Die Nummern werden neu vergeben, sonst stünde nach dem Filtern
+        *3. 7. 12.* da, und wer die Zahl tippt, nimmt den falschen Kunden.
+
+        Sicher ist das hier ohne Zusatzaufwand: Jede Zeile trägt die
+        Kennung des Kunden mit, und ``Auswahl`` gibt genau die Kennung der
+        gewaehlten Zeile weiter. Es gibt hier also keine Stelle, an der ein
+        Index auf eine Liste zeigen koennte, die gar nicht gezeichnet wird.
+        """
+        zeilen = [
             (
                 str(kunde["id"]),
                 str(nummer),
                 kunde["firma"],
                 kunde["ansprechpartner"] or "",
             )
-            for nummer, kunde in enumerate(kunden, start=1)
+            for nummer, kunde in enumerate(self.kunden, start=1)
+        ]
+        passend = filtern(zeilen, self._suche)
+
+        # Die Nummer wird auf die sichtbare Zeile gezogen, nicht mit
+        # geschleppt: Die Zahl vor dem Punkt ist hier ein Tastenkuerzel und
+        # kein Rang.
+        punkte = tuple(
+            (schluessel, str(neu), titel, erklaerung)
+            for neu, (schluessel, _alt, titel, erklaerung) in enumerate(passend, 1)
         )
-        yield Auswahl(punkte, self.kunde_gewaehlt)
+
+        auswahl = self.query(Auswahl)
+        if not auswahl:
+            return
+        liste = auswahl.first()
+        liste.punkte = punkte
+        liste.index = min(liste.index, max(0, len(punkte) - 1))
+        liste.refresh()
+
+        self.query_one(SuchZeile).zeige(
+            len(passend), len(zeilen), self._suche, "Kunden", "Kunde"
+        )
 
     def start_fokus(self) -> None:
         """Springt direkt zur Kontrolle, wenn Kunde und Positionen da sind.
@@ -384,6 +448,17 @@ class EditorScreen(BasisScreen):
         auswahl = self.query(Auswahl)
         if auswahl:
             auswahl.first().focus()
+
+    def action_suchen(self) -> None:
+        """Legt den Cursor ins Suchfeld.
+
+        Der Fokus bleibt zuerst auf der Liste, wie auf den anderen
+        Bildschirmen auch: Wer wenigen Kunden hat, blättert, und wer viele
+        hat, drückt einmal *suche*.
+        """
+        felder = self.query(Suchfeld)
+        if felder:
+            felder.first().focus()
 
     def kunde_gewaehlt(self, kunde_id: str) -> None:
         """Weiter zu den Positionen.
@@ -583,6 +658,8 @@ class PositionenScreen(BasisScreen):
 class LeistungAuswahlScreen(BasisScreen):
     """Eine Leistung aus der Preisliste für das Dokument wählen."""
 
+    BINDINGS = [Binding("suche", "suchen", "Suchen", show=True)]
+
     def __init__(
         self,
         verbindung: sqlite3.Connection,
@@ -600,6 +677,23 @@ class LeistungAuswahlScreen(BasisScreen):
         self.art = art
         self.fertig = fertig
         self.leistungen = dateien.leistungen(verbindung, nur_aktive=True)
+        self.sichtbar: list = list(self.leistungen)
+        self._suche = ""
+
+    def _zeile(self, leistung: object) -> list[str]:
+        """Baut die Textzeile einer Leistung.
+
+        Args:
+            leistung: Die Leistung.
+
+        Returns:
+            Die Zellen der Tabellenzeile.
+        """
+        return [
+            leistung["bezeichnung"],
+            leistung["einheit"],
+            betraege.euro(leistung["preis"]),
+        ]
 
     def inhalt(self) -> ComposeResult:
         """Baut die Liste der Leistungen.
@@ -611,17 +705,59 @@ class LeistungAuswahlScreen(BasisScreen):
             "Welche Leistung soll auf das Dokument? esc geht zurück.",
             classes="hinweis",
         )
+        yield Suchfeld(self._suche_geaendert)
+        yield SuchZeile(id="hinweis")
         yield Tabelle(
             [("Bezeichnung", 34), ("Einheit", 12), ("Preis", 14)],
-            [
-                [
-                    leistung["bezeichnung"],
-                    leistung["einheit"],
-                    betraege.euro(leistung["preis"]),
-                ]
-                for leistung in self.leistungen
-            ],
+            [],
         )
+
+    def on_mount(self) -> None:
+        """Zeichnet die Liste und legt den Fokus.
+
+        Siehe die gleiche Bemerkung beim EditorScreen: Yield ist ein
+        Generator, und die Widgets sind noch nicht einghaengt.
+        """
+        self._suche_anwenden()
+        self.start_fokus()
+
+    def _suche_geaendert(self, begriff: str) -> None:
+        """Sucht weiter, während getippt wird.
+
+        Args:
+            begriff: Der Text im Suchfeld.
+        """
+        self._suche = begriff
+        self._suche_anwenden()
+
+    def _suche_anwenden(self) -> None:
+        """Zeichnet die Liste mit dem, was zur Suche passt.
+
+        Hier ist die Falle: Die Tabelle kennt nur Text, und der Bildschirm
+        braucht die Leistung selbst. Also wird **über die Indizes**
+        gefiltert, nicht über die Zeilen: Zwei Leistungen können dieselbe
+        Bezeichnung, dieselbe Einheit und denselben Preis haben, und ein
+        Vergleich nach Zeilenwerten brächte dann nicht zu einem Ergebnis.
+        """
+        zeilen = [self._zeile(leistung) for leistung in self.leistungen]
+        nummern = [
+            nummer for nummer, zeile in enumerate(zeilen) if passt(zeile, self._suche)
+        ]
+
+        self.sichtbar = [self.leistungen[nummer] for nummer in nummern]
+
+        tabelle = self.query_one(Tabelle)
+        tabelle.zeilen = [zeilen[nummer] for nummer in nummern]
+        tabelle.index = min(tabelle.index, max(0, len(nummern) - 1))
+        tabelle.refresh()
+
+        self.query_one(SuchZeile).zeige(
+            len(nummern), len(zeilen), self._suche, "Leistungen", "Leistung"
+        )
+
+    def action_suchen(self) -> None:
+        """Legt den Cursor ins Suchfeld."""
+        self.query_one(Suchfeld).focus()
 
     def start_fokus(self) -> None:
         """Legt den Fokus auf die Liste der Leistungen."""
@@ -633,10 +769,12 @@ class LeistungAuswahlScreen(BasisScreen):
         Args:
             event: Die Nachricht der Tabelle.
         """
-        if event.zeile >= len(self.leistungen):
+        if event.zeile >= len(self.sichtbar):
             return
 
-        leistung = self.leistungen[event.zeile]
+        # ``sichtbar``, nicht ``leistungen``: Nach dem Filtern waere sonst
+        # die zweite sichtbare Zeile die dritte Leistung der Liste.
+        leistung = self.sichtbar[event.zeile]
         self.app.push_screen(
             FreiePositionScreen(
                 self.db,
