@@ -4,7 +4,7 @@ Eine App im Terminal für das Tonstudio: Kunden, Leistungen, Angebote und
 Rechnungen. Daten in SQLite, Ergebnis als PDF.
 """
 
-__version__ = "0.8.0"
+__version__ = "0.8.1"
 """Die Version des Programms.
 
 Steht auch in ``pyproject.toml``, weil man sie dort zum Einpacken braucht.
