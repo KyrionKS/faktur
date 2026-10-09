@@ -143,9 +143,17 @@ faktur/
     faktur.db
     logo.png
     Dokumente/
-      ANG - 0001 - Soundcheck GmbH.pdf
-      RE - 0002 - Soundcheck GmbH.pdf
+      ANG - 0199 - Soundcheck GmbH.pdf
+      RE - 0199 - Soundcheck GmbH.pdf
 ```
+
+Angebot und Rechnung eines Projekts heißen gleich, bis auf `ANG` und `RE` —
+darum stehen diese beiden Kürzel im Namen. Ein Angebot und eine Rechnung
+können sich also nicht gegenseitig ersetzen.
+
+**Zwei Angebote** mit derselben Nummer und demselben Kunden ergeben aber
+denselben Dateinamen. Fragt das Programm, bevor es die erste PDF überschreibt
+und du sie damit verlierst.
 
 Immer neben dem Ordner `faktur`, unabhängig davon, von wo du startest. Ein
 leerer Datenordner bedeutet: erster Start.

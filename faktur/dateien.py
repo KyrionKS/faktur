@@ -290,6 +290,48 @@ def summe_von(db: sqlite3.Connection, dokument_id: int) -> float:
     return float(zeile["summe"])
 
 
+def dateiname(dokument: sqlite3.Row, art: str, nummer_text: str | None = None) -> str:
+    """Baut den Dateinamen einer PDF.
+
+    Angebot und Rechnung liegen im selben Ordner, die Art steht deshalb im
+    Namen:
+
+        ANG - 0199 - Tonstudio Nordwind
+        RE - 0199 - Tonstudio Nordwind
+
+    Beide tragen dieselbe Nummer, weil sie zum selben Projekt gehoeren. Genau
+    das macht das Kuerzel ``ANG`` und ``RE`` noetig: Ohne sie hiessen die
+    beiden Dateien gleich und die zweite wuerde die erste ersetzen.
+
+    Args:
+        dokument: Das Dokument.
+        art: ``angebot`` oder ``rechnung``.
+        nummer_text: Die Nummer, wie sie im Namen stehen soll. Ohne
+            Angabe wird die gespeicherte genommen.
+
+    Returns:
+        Der Dateiname, ohne Ordner und ohne Endung.
+    """
+    kennung = "ANG" if art == "angebot" else "RE"
+    nummer = _sicher(nummer_text or dokument["nummer"] or str(dokument["id"]))
+    kunde = _sicher(dokument["firma"] or "ohne Kunde")
+    return f"{kennung} - {nummer} - {kunde}"
+
+
+def _sicher(text: str) -> str:
+    """Entfernt die Zeichen, die im Dateinamen Ärger machen.
+
+    Args:
+        text: Der Name.
+
+    Returns:
+        Der Name ohne Schrägstriche, Doppelpunkte und Rückschritte.
+    """
+    for zeichen in '/\\:*?"<>|':
+        text = text.replace(zeichen, "-")
+    return " ".join(text.split())
+
+
 def nummern(db: sqlite3.Connection) -> list[str]:
     """Gibt alle vergebenen Dokumentnummern zurück.
 
@@ -343,10 +385,9 @@ def dokument_speichern(
     Returns:
         Die Nummer des gespeicherten Dokuments.
 
-    Raises:
-        sqlite3.IntegrityError: Wenn die Nummer schon vergeben ist. Angebot
-            und Rechnung kommen aus einem Zähler, die Nummer muss für sich
-            allein eindeutig sein.
+    Die Nummer wird nicht auf Eindeutigkeit geprueft. Sie ist eine
+    Projektnummer, und ein Projekt hat ein Angebot und eine Rechnung — beide
+    tragen dieselbe.
     """
     from faktur.betraege import zahl
 
@@ -422,6 +463,10 @@ def als_angebot_uebernehmen(
 ) -> tuple[dict[str, str | int | None], list[dict[str, str | float | int | None]]]:
     """Liest ein Dokument und macht daraus den Kopf einer Rechnung.
 
+    Die Nummer des Angebots wandert mit: Die Rechnung gehört zum selben
+    Projekt und traegt dieselbe Nummer. Datum und Faelligkeit bleiben leer,
+    weil die Rechnung ihr eigenes Datum bekommt.
+
     Die Positionen werden mitgegeben, inklusive der Verknüpfung zur
     Leistung, damit der Preisliste wieder zugeordnet werden kann.
 
@@ -442,9 +487,13 @@ def als_angebot_uebernehmen(
     if dokument["art"] != "angebot":
         raise ValueError("Nur aus einem Angebot lässt sich eine Rechnung machen.")
 
+    # Die Nummer wandert mit. Sie ist die Projektnummer, und das Angebot
+    # und die Rechnung sind derselbe Vorgang: Aus Angebot 0199 wird Rechnung
+    # 0199. Bis 0.8.2 stand hier ein leeres Feld, und es wurde die naechste
+    # freie vorgeschlagen — aus einem Projekt wurden dadurch zwei.
     kopf: dict[str, str | int | None] = {
         "art": "rechnung",
-        "nummer": "",
+        "nummer": dokument["nummer"],
         "kunde_id": dokument["kunde_id"],
         "datum": "",
         "faellig": "",

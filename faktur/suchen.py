@@ -91,6 +91,11 @@ def sichtbar(
     Rücksprung über eine Spalte — Kennung oder Nummer — wäre nur so lange
     richtig, wie diese Spalte eindeutig ist. Beides hat schon Fehler gemacht.
 
+    Bei der Nummer kommt hinzu, dass sie seit 0.9.0 **gar nicht** eindeutig
+    ist: Die Nummer ist eine Projektnummer, und Angebot und Rechnung eines
+    Projekts tragen dieselbe. Ein Rücksprung über sie hätte hier nicht
+    zufällig funktioniert, sondern immer danebengelegen.
+
     Args:
         datensaetze: Die Datensätze in ihrer alten Reihenfolge.
         zeilen: Die Textzeilen dazu, in derselben Reihenfolge.

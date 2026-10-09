@@ -266,12 +266,35 @@ async def durchlauf() -> int:
         await durch_das_formular(4)
         pruefe("Rechnung gespeichert", "Gespeichert")
 
+        # Die Projektnummer bleibt dieselbe. Bis 0.8.2 stand hier die
+        # naechste freie Nummer, und die Nummer musste eindeutig sein —
+        # beides hat verhindert, was der Benutzer braucht: Aus Angebot 0199
+        # wird Rechnung 0199.
+        projekt = [
+            (d["art"], d["nummer"])
+            for d in app.db.execute("SELECT art, nummer FROM dokumente")
+        ]
+        if len(projekt) == 2 and len({n for _a, n in projekt}) == 1:
+            print(f"  ok     ein Projekt, eine Nummer: {projekt[0][1]}")
+        else:
+            nonlocal_fehler[0] += 1
+            print(
+                f"  FEHLT  Projektnummer: {projekt} — erwartet zwei Dokumente "
+                "mit derselben Nummer"
+            )
+
         await tippen("escape", "escape")
         await tippen("6")
-        # Die Nummer, nicht das Wort "Rechnung": Das steht auch im
+        # Die Projektnummer, nicht "Rechnung": Das Wort steht auch im
         # Hauptmenue, und damit war diese Pruefung schon auf der falschen
         # Seite gruen.
-        pruefe("Rechnung in der Liste", "0002")
+        #
+        # "0001" und nicht "0002": Der Lauf tippt keine eigene Nummer, er
+        # nimmt den Vorschlag. Angebot und Rechnung bekommen deshalb beide
+        # 0001 — und genau das wird zwei Zeilen weiter oben geprueft. Bis
+        # 0.8.2 stand hier 0002, weil die Umwandlung die naechste freie
+        # Nummer vorgeschlagen hat.
+        pruefe("Rechnung in der Liste", "0001")
 
         # --- Preisliste
         await tippen("escape")

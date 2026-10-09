@@ -10,7 +10,6 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-import pytest
 from faktur import dateien, db
 
 
@@ -180,21 +179,60 @@ def test_leere_datenbank_braucht_keine_sicherung(tmp_path: Path) -> None:
     assert not pfad.with_suffix(pfad.suffix + ".bak").exists()
 
 
-def test_index_verbietet_doppelte_nummern(tmp_path: Path) -> None:
-    """Die Datenbank lässt keine doppelte Nummer mehr zu.
+def test_der_index_ist_verschwunden(tmp_path: Path) -> None:
+    """Es gibt keinen Index auf der Nummer mehr.
+
+    Bis 0.8.2 lag ein ``UNIQUE``-Index auf ``dokumente.nummer``. Angebot und
+    Rechnung eines Projekts tragen dieselbe Nummer, also musste er weg.
+    Er wird bei jedem Start fallengelassen, damit alte Datenbanken ihn
+    verlieren, ohne dass eine Wanderung noetig wird.
 
     Args:
         tmp_path: Das temporäre Verzeichnis von pytest.
     """
     verbindung = db.verbinden(tmp_path / "index.db")
-    dateien.dokument_speichern(
-        verbindung, {"art": "angebot", "nummer": "0001", "datum": "01.10.2026"}, []
-    )
 
-    with pytest.raises(sqlite3.IntegrityError):
-        dateien.dokument_speichern(
-            verbindung,
-            {"art": "rechnung", "nummer": "0001", "datum": "02.10.2026"},
-            [],
-        )
+    indizes = verbindung.execute("PRAGMA index_list(dokumente)").fetchall()
+    namen = {zeile[1] for zeile in indizes}
+
+    assert "dokumente_nummer_eindeutig" not in namen, (
+        f"Der Index auf der Nummer liegt noch da: {sorted(namen)}"
+    )
     verbindung.close()
+
+
+def test_und_eine_alte_datenbank_verliert_ihn_beim_start(tmp_path: Path) -> None:
+    """Eine Datenbank, die den Index noch hat, wird ihn los.
+
+    Genau das ist der Grund, warum das Weglassen bei **jedem** Start
+    passiert und nicht nur bei einer neuen Datei: Sonst bliebe in jeder
+    bestehenden Datenbank die Sperre liegen, und der Benutzer wuerde weiter
+    sehen, dass 0199 abgelehnt wird.
+
+    Args:
+        tmp_path: Das temporäre Verzeichnis von pytest.
+    """
+    pfad = tmp_path / "alt.db"
+
+    # Erst eine Datenbank bauen und den Index von Hand wieder hinlegen,
+    # so wie es vor 0.9.0 aussah.
+    verbindung = db.verbinden(pfad)
+    verbindung.execute(
+        "CREATE UNIQUE INDEX dokumente_nummer_eindeutig ON dokumente (nummer)"
+    )
+    verbindung.commit()
+    verbindung.close()
+
+    zweite = db.verbinden(pfad)
+    namen = {zeile[1] for zeile in zweite.execute("PRAGMA index_list(dokumente)")}
+    assert "dokumente_nummer_eindeutig" not in namen
+
+    dateien.dokument_speichern(
+        zweite, {"art": "angebot", "nummer": "0199", "datum": "01.10.2026"}, []
+    )
+    dateien.dokument_speichern(
+        zweite, {"art": "rechnung", "nummer": "0199", "datum": "02.10.2026"}, []
+    )
+    zweite.close()
+
+    assert len(dateien.dokumente(db.verbinden(pfad))) == 2

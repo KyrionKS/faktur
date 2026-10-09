@@ -133,46 +133,53 @@ def test_positionen_behalten_ihre_reihenfolge(verbindung: sqlite3.Connection) ->
     assert namen == ["Erste", "Zweite", "Dritte"]
 
 
-def test_doppelte_nummer_wird_abgewiesen(verbindung: sqlite3.Connection) -> None:
-    """Zwei Rechnungen mit derselben Nummer gehen nicht.
+def test_doppelte_nummer_wird_angenommen(verbindung: sqlite3.Connection) -> None:
+    """Zwei Rechnungen mit derselben Nummer gehen.
+
+    Die Nummer ist eine Projektnummer und gehoert dem Benutzer. Das Programm
+    prueft sie nicht, und seit 0.9.0 gibt es auch keinen Index mehr, der es
+    koennte.
 
     Args:
         verbindung: Die Testdatenbank.
     """
     dateien.dokument_speichern(
-        verbindung, {"art": "rechnung", "nummer": "2026-001", "datum": "06.10.2026"}, []
+        verbindung, {"art": "rechnung", "nummer": "0199", "datum": "06.10.2026"}, []
+    )
+    dateien.dokument_speichern(
+        verbindung,
+        {"art": "rechnung", "nummer": "0199", "datum": "20.10.2026"},
+        [],
     )
 
-    with pytest.raises(sqlite3.IntegrityError):
-        dateien.dokument_speichern(
-            verbindung,
-            {"art": "rechnung", "nummer": "2026-001", "datum": "06.10.2026"},
-            [],
-        )
+    assert len(dateien.dokumente(verbindung, "rechnung")) == 2
 
 
-def test_gleiche_nummer_fuer_angebot_und_rechnung_geht_nicht(
+def test_gleiche_nummer_fuer_angebot_und_rechnung_geht(
     verbindung: sqlite3.Connection,
 ) -> None:
-    """Ein Zähler für beide Arten, also auch eine Nummer für beide.
+    """Angebot und Rechnung eines Projekts tragen dieselbe Nummer.
 
-    Angebot und Rechnung eines Vorgangs sollen nebeneinander stehen, etwa
-    0001 und 0002. Trügen beide dieselbe Nummer, wäre am Papier nicht mehr zu
-    sehen, dass sie zusammengehören.
+    Das ist der eigentliche Zweck: Aus Angebot 0199 wird Rechnung 0199, weil
+    beide zum selben Projekt gehoeren. Bis 0.8.2 stand hier ein
+    ``UNIQUE``-Index, und genau das war der Fall, den der Benutzer nicht
+    konnte.
 
     Args:
         verbindung: Die Testdatenbank.
     """
     dateien.dokument_speichern(
-        verbindung, {"art": "angebot", "nummer": "0001", "datum": "06.10.2026"}, []
+        verbindung, {"art": "angebot", "nummer": "0199", "datum": "06.10.2026"}, []
+    )
+    dateien.dokument_speichern(
+        verbindung, {"art": "rechnung", "nummer": "0199", "datum": "20.10.2026"}, []
     )
 
-    with pytest.raises(sqlite3.IntegrityError):
-        dateien.dokument_speichern(
-            verbindung,
-            {"art": "rechnung", "nummer": "0001", "datum": "06.10.2026"},
-            [],
-        )
+    dokumente = dateien.dokumente(verbindung)
+    assert [d["art"] for d in dokumente] == ["rechnung", "angebot"]
+    assert {d["nummer"] for d in dokumente} == {"0199"}, (
+        "Beide Dokumente muessen dieselbe Nummer tragen."
+    )
 
 
 def test_zaehler_zaehlt_ueber_beide_arten(verbindung: sqlite3.Connection) -> None:

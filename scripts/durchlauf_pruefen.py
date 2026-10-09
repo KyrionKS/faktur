@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from faktur import betraege, dateien, db, einstellungen, pdf  # noqa: E402
-from faktur.screens.dokumente import dateiname  # noqa: E402
+from faktur.dateien import dateiname  # noqa: E402
 
 #: Wohin die Beispieldateien geschrieben werden.
 ZIEL = Path(__file__).resolve().parents[1] / "beispiele"
@@ -180,10 +180,15 @@ def main() -> int:
     print(f"  Logo       {einstellungen.logo_pfad(verbindung) or 'keins'}")
     print()
 
+    # Eine Projektnummer fuer beide Dokumente. Die Nummer gehoert zum
+    # Projekt, und ein Projekt hat ein Angebot und eine Rechnung — bis 0.8.2
+    # bekamen hier beide eine eigene, weil die Nummer eindeutig sein musste.
+    projekt = dateien.naechste_nummer(verbindung)
+
     dokument_bauen(
         verbindung,
         "angebot",
-        dateien.naechste_nummer(verbindung),
+        projekt,
         kunde_id,
         {"gueltig_bis": betraege.plus_tage(21)},
         ANGEBOT_POSITIONEN,
@@ -191,7 +196,7 @@ def main() -> int:
     dokument_bauen(
         verbindung,
         "rechnung",
-        dateien.naechste_nummer(verbindung),
+        projekt,
         kunde_id,
         {"faellig": betraege.plus_tage(14)},
         RECHNUNG_POSITIONEN,
