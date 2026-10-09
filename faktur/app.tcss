@@ -46,6 +46,19 @@ Screen {
     padding: 0 1;
 }
 
+/* Das Formular aus mehreren Feldern.
+ *
+ * Ohne diese Zeile hat das Programm seine unteren Felder abgeschnitten und
+ * sich nicht rollen lassen. ``Formular`` erbt von ``Vertical``, und das ist
+ * von Haus aus ``1fr``: Es schrumpft in die Hoehe hinein, statt ueberzustehen.
+ * Damit bekam der ``VerticalScroll`` darueber nichts zu rollen, es erschien
+ * kein Balken, und wer bei einem Fenster von 34 Zeilen ein Kundenformular
+ * mit acht Feldern ausfuellt, sah drei davon. */
+
+.formular {
+    height: auto;
+}
+
 /* Beschriftungen neben Eingabefeldern */
 
 .bezeichnung {

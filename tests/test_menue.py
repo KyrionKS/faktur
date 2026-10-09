@@ -103,22 +103,31 @@ def test_die_nummern_sind_fortlaufend_ohne_luecke() -> None:
 # ------------------------------------------------------- die Bildschirmbilder
 
 
-def _faelle() -> list[tuple[str, list[str], str]]:
+def _faelle() -> list[tuple[str, list[str], str, int]]:
     """Liest die Fallliste des Bilderskripts.
 
     Returns:
-        Name, Tasten und der erwartete Bildschirm.
+        Name, Tasten, der erwartete Bildschirm und die Fensterhoehe.
     """
     quelle = (WURZEL / "scripts" / "bilder_speichern.py").read_text(encoding="utf-8")
     gefunden = []
 
-    for zeile in quelle.splitlines():
-        treffer = re.match(
-            r'\s*\("(\d+_\w+)",\s*(\[[^\]]*\]),\s*(\w+|None),\s*"(\w+)"\)', zeile
-        )
-        if treffer:
-            tasten = re.findall(r'"([^"]+)"', treffer.group(2))
-            gefunden.append((treffer.group(1), tasten, treffer.group(4)))
+    # ``re.DOTALL`` ist noetig, weil ``ruff format`` einen langen Fall ueber
+    # mehrere Zeilen umbricht. Zeilenweise gelesen waeren die stillschweigend
+    # weggefallen — der Waechter haette dann nur noch ueber die uebrigen
+    # Faelle gewacht und nichts gemerkt.
+    #
+    # Das fuenfte Feld ist die Fensterhoehe und darf fehlen; sie steht erst
+    # seit 0.8.1 in der Liste. Ohne sie nimmt der Fall die normale Hoehe.
+    for treffer in re.finditer(
+        r'\(\s*"(\d+_\w+)",\s*(\[[^\]]*\]),\s*(?:\w+|None)\s*,\s*"(\w+)"\s*,?\s*'
+        r"(?:,\s*(\d+)\s*,?\s*)?\)",
+        quelle,
+        re.DOTALL,
+    ):
+        tasten = re.findall(r'"([^"]+)"', treffer.group(2))
+        hoehe = int(treffer.group(4)) if treffer.group(4) else 34
+        gefunden.append((treffer.group(1), tasten, treffer.group(3), hoehe))
 
     return gefunden
 
@@ -136,12 +145,12 @@ def test_der_bilderbogen_nennt_je_bild_den_erwarteten_bildschirm() -> None:
 
 
 @pytest.mark.parametrize(
-    ("name", "tasten", "erwartet"),
+    ("name", "tasten", "erwartet", "hoehe"),
     _faelle(),
-    ids=[f"{n}" for n, _t, _e in _faelle()],
+    ids=[f"{n}" for n, _t, _e, _h in _faelle()],
 )
 def test_die_tasten_im_bilderskript_oeffnen_auch_diesen_bildschirm(
-    name: str, tasten: list[str], erwartet: str
+    name: str, tasten: list[str], erwartet: str, hoehe: int
 ) -> None:
     """Der Bildschirm, der offen ist, muss der im Namen sein.
 
@@ -162,23 +171,27 @@ def test_die_tasten_im_bilderskript_oeffnen_auch_diesen_bildschirm(
 
 
 def test_ein_bildschirm_nur_mit_verschiedenen_tasten() -> None:
-    """Zweimal derselbe Bildschirm geht, aber nur mit anderen Tasten.
+    """Zweimal derselbe Bildschirm geht, aber nur mit etwas anderem.
 
     Der Bildschirm *Aussehen* wird zweimal aufgenommen: einmal mit dem
     Angebot, einmal mit der Rechnung. Das ist gewollt und sieht auf den
     beiden Bildern auch verschieden aus.
 
-    Zweimal derselbe Bildschirm **mit denselben** Tasten dagegen ist
-    entweder eines zu viel — oder das eine davon zeigt doch etwas anderes,
-    weil eine Taste nicht das tut, was sie sollte.
+    Zweimal derselbe Bildschirm **mit denselben Tasten und derselben
+    Fensterhoehe** dagegen ist entweder eines zu viel — oder das eine davon
+    zeigt doch etwas anderes, weil eine Taste nicht das tut, was sie sollte.
+
+    Die Fensterhoehe gehoert dazu, seit es Bilder im kleinen Fenster gibt:
+    Dasselbe Formular in einem 20-Zeilen-Fenster sieht anders aus als in
+    einem 34-Zeilen-Fenster, und genau darum geht es bei diesen Bildern.
 
     Returns:
         Nichts.
     """
     gesehen: dict[str, list[str]] = {}
 
-    for _name, tasten, bildschirm in _faelle():
-        gesehen.setdefault(bildschirm, []).append(",".join(tasten))
+    for _name, tasten, bildschirm, hoehe in _faelle():
+        gesehen.setdefault(bildschirm, []).append(f"{','.join(tasten)}@{hoehe}")
 
     doppelt = {
         bildschirm: tasten
@@ -187,7 +200,8 @@ def test_ein_bildschirm_nur_mit_verschiedenen_tasten() -> None:
     }
 
     assert doppelt == {}, (
-        f"Diese Bildschirme werden mehrfach mit denselben Tasten aufgenommen: {doppelt}"
+        "Diese Bildschirme werden mehrfach mit denselben Tasten und "
+        f"derselben Fensterhoehe aufgenommen: {doppelt}"
     )
 
 
@@ -212,9 +226,13 @@ def test_die_bilder_sind_benannt_wie_ihre_bildschirme() -> None:
         "09_aussehen": "AussehenScreen",
         "10_aussehen_rechnung": "AussehenScreen",
         "11_offene": "OffeneScreen",
+        "12_kundensuche": "EditorScreen",
+        "13_leistungssuche": "LeistungAuswahlScreen",
+        "14_formular_klein": "KundeFormularScreen",
+        "15_brieftext_klein": "BausteinScreen",
     }
 
-    gefunden = {name: bildschirm for name, _t, bildschirm in _faelle()}
+    gefunden = {name: bildschirm for name, _t, bildschirm, _h in _faelle()}
 
     assert gefunden == erlaubt, (
         "Die Fallliste und die Erwartung hier im Test sind auseinander. "
