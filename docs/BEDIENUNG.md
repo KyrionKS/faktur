@@ -19,10 +19,11 @@ selbst ändert sich nicht mehr.
     2. Rechnung erstellen        Aus Leistungen abrechnen
     3. Kunden                    Kunden anlegen, ansehen, suchen
     4. Leistungen                Die Preisliste pflegen
-    5. Dokumente                 Angebote und Rechnungen durchsehen
-    6. Stammdaten                Firma, Bank, Logo, Brieftexte
-    7. PDF neu schreiben         Ein Dokument noch einmal ausgeben
-    8. Rechnungsordner öffnen    Den Ordner mit den PDF zeigen
+    5. Offene Forderungen        Was noch nicht bezahlt ist
+    6. Dokumente                 Angebote und Rechnungen durchsehen
+    7. Stammdaten                Firma, Bank, Logo, Brieftexte
+    8. PDF neu schreiben         Ein Dokument noch einmal ausgeben
+    9. Rechnungsordner öffnen    Den Ordner mit den PDF zeigen
     q. Beenden                   Das Programm verlassen
 ```
 
@@ -272,4 +273,6 @@ keine Rolle. Wer `check` tippt, findet *Soundcheck*.
 Auf der Dokumentenliste bleibt die markierte Zeile dieselbe: Wer einen
 Kunden sucht und dann ein Angebot in eine Rechnung umwandelt, wandelt das
 gefundene um. Gefiltert wird über die Nummer, die eindeutig ist.
+
+
 
