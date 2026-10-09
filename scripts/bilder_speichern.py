@@ -160,6 +160,7 @@ async def aufnehmen(
     name: str,
     vorbereiten: object = None,
     erwartet: str = "",
+    hoehe: int = 34,
 ) -> Path:
     """Startet die App, drückt Tasten und schreibt ein Bild.
 
@@ -168,6 +169,7 @@ async def aufnehmen(
         name: Der Name der Datei ohne Endung.
         vorbereiten: Eine Funktion, die vor dem ersten Tastendruck läuft.
         erwartet: Der Name des Bildschirms, der danach offen sein muss.
+        hoehe: Wie hoch das Terminal in diesem Bild sein soll.
 
     Returns:
         Der Pfad des Bildes.
@@ -178,7 +180,7 @@ async def aufnehmen(
     """
     with tempfile.TemporaryDirectory() as ordner:
         app = FakturApp(Path(ordner) / "bild.db")
-        async with app.run_test(size=(100, 34)) as pilot:
+        async with app.run_test(size=(100, hoehe)) as pilot:
             await pilot.pause()
             if vorbereiten is not None:
                 await vorbereiten(app, pilot)  # type: ignore[operator]
@@ -368,6 +370,25 @@ FAELLE = (
         ["1", "1", "p", "suche", "m"],
         _mit_kunden,
         "LeistungAuswahlScreen",
+        34,
+    ),
+    # Ein Fenster, in das das Formular nicht passt. Der letzte Fall von 0.8:
+    # Bis dahin wurden die unteren Felder abgeschnitten, ohne dass man
+    # hinscrollen konnte. Derselbe Bildschirm, nur das Fenster ist kleiner,
+    # und nach achtmal Tab muss das letzte Feld im Bild sein.
+    (
+        "14_formular_klein",
+        ["3", "n", "tab", "tab", "tab", "tab", "tab", "tab", "tab", "tab"],
+        _mit_kunden,
+        "KundeFormularScreen",
+        20,
+    ),
+    (
+        "15_brieftext_klein",
+        ["7", "3"],
+        None,
+        "BausteinScreen",
+        20,
     ),
 )
 
@@ -378,8 +399,11 @@ async def main() -> None:
     Returns:
         Nichts. Schreibt nach stdout.
     """
-    for name, befehle, vorbereiten, erwartet in FAELLE:
-        pfad = await aufnehmen(befehle, name, vorbereiten, erwartet)
+    for name, befehle, vorbereiten, erwartet, *rest in FAELLE:
+        # Die Fensterhoehe steht nur bei den Bildern, bei denen es darauf
+        # ankommt: Sie fehlt, ist es ein ganz normales Fenster.
+        hoehe = rest[0] if rest else 34
+        pfad = await aufnehmen(befehle, name, vorbereiten, erwartet, hoehe)
         print(f"  {pfad.name:<22} {pfad.stat().st_size:>7} Bytes")
 
 
