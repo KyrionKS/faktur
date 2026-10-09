@@ -34,44 +34,6 @@ KOPFFELDER_RECHNUNG = [
 ]
 
 
-def dateiname(dokument: sqlite3.Row, art: str, nummer_text: str | None = None) -> str:
-    """Baut den Dateinamen einer PDF.
-
-    Angebot und Rechnung liegen im selben Ordner, die Art steht deshalb im
-    Namen:
-
-        ANG - 0001 - Soundcheck GmbH
-        RE - 0002 - Soundcheck GmbH
-
-    Args:
-        dokument: Das Dokument.
-        art: ``angebot`` oder ``rechnung``.
-        nummer_text: Die Nummer, wie sie im Namen stehen soll. Ohne
-            Angabe wird die gespeicherte genommen.
-
-    Returns:
-        Der Dateiname, ohne Ordner und ohne Endung.
-    """
-    kennung = "ANG" if art == "angebot" else "RE"
-    nummer = _sicher(nummer_text or dokument["nummer"] or str(dokument["id"]))
-    kunde = _sicher(dokument["firma"] or "ohne Kunde")
-    return f"{kennung} - {nummer} - {kunde}"
-
-
-def _sicher(text: str) -> str:
-    """Entfernt die Zeichen, die im Dateinamen Ärger machen.
-
-    Args:
-        text: Der Name.
-
-    Returns:
-        Der Name ohne Schrägstriche, Doppelpunkte und Rückschritte.
-    """
-    for zeichen in '/\\:*?"<>|':
-        text = text.replace(zeichen, "-")
-    return " ".join(text.split())
-
-
 class DokumentenScreen(BasisScreen):
     """Die Liste aller Angebote und Rechnungen."""
 
@@ -231,10 +193,9 @@ class DokumentenScreen(BasisScreen):
             self.meldung("Das Dokument gibt es nicht mehr.", gut=False)
             return
 
-        ziel = (
-            db.ausgabeordner()
-            / f"{dateiname(voll, voll['art'], pdf.nummer_anzeige(voll, self.db))}.pdf"
-        )
+        nummer_text = pdf.nummer_anzeige(voll, self.db)
+        name = dateien.dateiname(voll, voll["art"], nummer_text)
+        ziel = db.ausgabeordner() / f"{name}.pdf"
         try:
             pdf.erzeugen(self.db, voll, ziel)
         except OSError:
@@ -510,6 +471,11 @@ class PositionenScreen(BasisScreen):
         super().__init__(verbindung)
         self.art = art
         self.eltern = eltern
+        #: Das gespeicherte Dokument und sein Ziel, solange auf die Antwort
+        #: zur Frage gewartet wird, ob eine gleichnamige PDF ersetzt werden
+        #: darf.
+        self._wartend: tuple | None = None
+        self._ziel = db.ausgabeordner()
         self.positionen = list(eltern.positionen)
 
     async def on_screen_resume(self) -> None:
@@ -1070,11 +1036,11 @@ class KontrolleScreen(BasisScreen):
             self.meldung("Ohne Nummer geht es nicht.", gut=False)
             return
 
-        nummer = str(angaben["nummer"]).strip()
-        if nummer in dateien.nummern(self.db):
-            self.meldung(f"Die Nummer {nummer} ist schon vergeben.", gut=False)
-            return
-
+        # Keine Pruefung auf eine bereits vergebene Nummer, und keine
+        # Meldung darueber. Die Nummer ist eine Projektnummer und gehoert
+        # dem Benutzer; ein Projekt traegt sie an Angebot und Rechnung
+        # gleichermassen. Bis 0.8.2 stand hier eine Sperre, die genau das
+        # verhindert hat.
         art = self.art
         dokument_id = dateien.dokument_speichern(
             self.db,
@@ -1087,10 +1053,42 @@ class KontrolleScreen(BasisScreen):
             self.meldung("Das Dokument liess sich nicht lesen.", gut=False)
             return
 
-        ziel = (
-            db.ausgabeordner()
-            / f"{dateiname(dokument, art, pdf.nummer_anzeige(dokument, self.db))}.pdf"
+        self._wartend = (dokument, art)
+
+        # Liegt schon eine Datei mit diesem Namen im Ordner, wird gefragt.
+        # Angebot und Rechnung kommen nicht in dieselbe Datei, weil ANG und
+        # RE den Namen unterscheiden — aber **zwei Angebote** mit derselben
+        # Nummer und demselben Kunden ergeben denselben Namen. Ohne diese
+        # Frage wuerde die zweite PDF die erste ersetzen, ohne dass etwas
+        # piept. Genau das ist zweimal mit dem Logo passiert.
+        nummer_text = pdf.nummer_anzeige(dokument, self.db)
+        self._ziel = db.ausgabeordner() / (
+            f"{dateien.dateiname(dokument, art, nummer_text)}.pdf"
         )
+        if self._ziel.is_file():
+            self.bestaetigen(
+                f"{self._ziel.name} gibt es schon. Ueberschreiben?",
+                self._pdf_schreiben,
+            )
+            return
+
+        self._pdf_schreiben()
+
+    def _pdf_schreiben(self) -> None:
+        """Schreibt die PDF des gespeicherten Dokuments.
+
+        Steht hier und nicht in :meth:`on_formular_fertig`, weil es erst
+        nach der Antwort auf die Frage laufen darf.
+
+        Returns:
+            Nichts.
+        """
+        if self._wartend is None:
+            return
+        dokument, _art = self._wartend
+        self._wartend = None
+        ziel = self._ziel
+
         try:
             pdf.erzeugen(self.db, dokument, ziel)
         except OSError:

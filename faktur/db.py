@@ -103,13 +103,16 @@ CREATE TABLE IF NOT EXISTS positionen (
 CREATE INDEX IF NOT EXISTS positionen_dokument ON positionen (dokument_id);
 """
 
-#: Der Index auf die Nummer steht nicht im Schema, weil er beim Umstieg von
-#: ``(art, nummer)`` auf ``nummer`` ausgetauscht werden muss. SQLite kann
-#: einen Index nicht umdeuten, nur fallen lassen und neu anlegen.
+#: Es gibt keinen Index auf der Nummer, und seit 0.9.0 auch keinen mehr.
 #:
-#: Der Zähler läuft für Angebote und Rechnungen zusammen. Deshalb muss die
-#: Nummer allein eindeutig sein, sonst dürfte ein Angebot und eine Rechnung
-#: dieselbe Nummer tragen und nichts wäre mehr durchgängig zu lesen.
+#: Bis 0.8.2 stand dort ein ``UNIQUE``-Index, und die Nummer musste für sich
+#: allein eindeutig sein, damit Angebot und Rechnung nicht dieselbe tragen
+#: konnten. Die Nummer ist aber eine **Projektnummer**: Ein Projekt hat ein
+#: Angebot *und* eine Rechnung, und beide tragen dieselbe. Angebot 0199 und
+#: Rechnung 0199 sind ein Vorgang, nicht zwei.
+#:
+#: Der alte Index wird bei jedem Start fallengelassen, sonst bliebe er in
+#: bestehenden Datenbanken liegen und das Ablehnen ginge weiter.
 
 #: Wie viele Stellen eine Dokumentnummer hat.
 NUMMER_STELLEN = 4
@@ -274,20 +277,18 @@ def _nummern_umerodieren(verbindung: sqlite3.Connection) -> None:
 
 
 def _indizes_setzen(verbindung: sqlite3.Connection) -> None:
-    """Sorgt für den richtigen Index auf der Dokumentnummer.
+    """Räumt die alten Indexe auf der Dokumentnummer weg.
 
-    Die Nummer muss für sich allein eindeutig sein, weil Angebot und
-    Rechnung aus einem Zähler kommen. Ein alter Index auf ``(art, nummer)``
-    würde das noch zulassen, also wird er ersetzt.
+    Bis 0.8.2 lag dort ein ``UNIQUE``-Index: Die Nummer musste für sich
+    allein eindeutig sein. Sie ist eine Projektnummer, und ein Projekt hat ein
+    Angebot *und* eine Rechnung — beide tragen dieselbe. Der Index wird bei
+    jedem Start fallengelassen, damit alte Datenbanken die Sperre verlieren,
+    ohne dass eine Wanderung noetig wird.
 
     Args:
         verbindung: Die Datenbankverbindung.
     """
     verbindung.execute("DROP INDEX IF EXISTS dokumente_nummer_eindeutig")
-    verbindung.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS dokumente_nummer_eindeutig"
-        " ON dokumente (nummer)"
-    )
     verbindung.commit()
 
 
