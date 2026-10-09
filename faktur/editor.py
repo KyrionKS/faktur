@@ -61,6 +61,18 @@ class Brieftext(Vertical):
         height: auto;
         padding: 0 0 1 0;
     }
+    /* Das Textfeld nimmt, was frei ist, und gibt erst bei 22 Zeilen nach.
+     *
+     * Vorher stand hier eine feste Hoehe von 14. Die passte nur auf einem
+     * hohen Terminal: Bei 30 Zeilen Fensterhoehe blieben fuer die Liste der
+     * Platzhalter genau eine Zeile uebrig, und unter 22 ragte das Feld
+     * aus dem Bild heraus, ohne dass sich etwas bewegen liess. */
+    Brieftext > TextArea {
+        min-height: 5;
+    }
+    #platzhalter {
+        min-height: 3;
+    }
     """
 
     class Gespeichert(Message):
@@ -87,7 +99,6 @@ class Brieftext(Vertical):
         text: str,
         beschriftung: str,
         vorschlag: Callable[[], str] | None = None,
-        zeilen: int = 14,
     ) -> None:
         """Legt den Editor an.
 
@@ -95,7 +106,6 @@ class Brieftext(Vertical):
             text: Der Text, der drinsteht.
             beschriftung: Ein Satz darüber, was hier eingetragen wird.
             vorschlag: Liefert den Vorschlag wieder, falls er gebraucht wird.
-            zeilen: Wie viele Zeilen das Feld hoch sein soll.
         """
         super().__init__()
         self.vorschlag = vorschlag
@@ -109,7 +119,6 @@ class Brieftext(Vertical):
             compact=True,
             id="brief",
         )
-        self.feld.styles.height = zeilen
 
         # ``theme`` nimmt nur den Namen an. Das Theme selbst muss vorher
         # angemeldet werden, sonst sucht Textual nach einem Eintrag mit dem
