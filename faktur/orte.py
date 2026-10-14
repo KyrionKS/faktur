@@ -3,12 +3,16 @@
 Alles liegt in einem Ordner ``daten`` neben dem Programm. Also immer neben
 dem Ordner ``faktur``, egal von wo du startest:
 
-    /Users/kyrion/Vibecoding/faktur/daten/faktur.db
+    .../faktur/daten/faktur.db
 
 Das ist der Punkt: Das Programm wird aus dem Quelltext gestartet, und der
 Quelltext kann von überall kommen. Ein ``~/Library/Application Support``-Pfad
 wäre stabiler, läge aber an einer Stelle, die man nicht wiederfindet. Ein
 Ordner neben dem Programm ist genau da, wo man ihn sucht.
+
+Der Pfad steht hier absichtlich nur als Beispiel und ohne Namen: Ein
+vollständiger Pfad im Quelltext verrät, wer daran arbeitet — und wenn der
+Rechner den Ordner später woanders hinlegt, stimmt er ohnehin nicht mehr.
 
 ``daten/`` steht in der ``.gitignore`` und wird mitveröffentlicht, wenn er
 versehentlich committet wird.

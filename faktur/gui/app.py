@@ -110,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
         app.setWindowIcon(QIcon(str(bild)))
 
     fenster = Fenster(_verbindung())
-    fenster.show()
+    fenster.zeige()
 
     return app.exec()
 

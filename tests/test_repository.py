@@ -23,6 +23,13 @@ VERBOTENE_ENDUNGEN = (".db", ".db.bak", ".sqlite", ".sqlite3", ".pdf", ".bak")
 #: Ordner, deren Inhalt dem Benutzer gehört.
 GESCHUETZT = ("daten/",)
 
+#: Wurzels des Projekts.
+WURZEL = Path(__file__).resolve().parents[1]
+
+#: Muster fuer Pfade, die einen Namen verraten. Zusammengesetzt, damit
+#: dieser Wächter nicht auf sich selbst zeigt.
+_BENUTZERPFAD = tuple("/" + teil + "/" for teil in ("Users", "home"))
+
 
 def _git(*args: str) -> str | None:
     """Führt einen Git-Befehl aus.
@@ -145,4 +152,39 @@ def test_keine_fremden_daten_in_der_historie() -> None:
         + ", ".join(sorted(schuldig)[:10])
         + ". Sie werden mitveröffentlicht und müssen mit git filter-repo "
         "herausgeschrieben werden."
+    )
+
+
+# ------------------------------------------------- keine Namen im Quelltext
+
+
+@pytest.mark.parametrize("ordner", ["faktur", "scripts", "tests", "docs"])
+def test_kein_absoluter_pfad_im_quellext(ordner: str) -> None:
+    """Kein absoluter Benutzerpfad im Quelltext.
+
+    In ``faktur/orte.py`` stand jahrelang der vollstaendige Pfad des
+    Entwicklerrechners als Beispiel. Das verrät, wer daran arbeitet, und
+    stimmt schon beim naechsten Umzug nicht mehr.
+
+    Die beiden Muster stehen nicht woertlich in diesem Text — sonst fände
+    der Wächter sich selbst und schlaegt an.
+
+    Args:
+        ordner: Der Ordner, in dem gesucht wird.
+    """
+    gefunden: list[str] = []
+
+    for datei in sorted((WURZEL / ordner).rglob("*")):
+        if datei.suffix not in {".py", ".md"}:
+            continue
+        zeilen = datei.read_text(encoding="utf-8").splitlines()
+        for nummer, zeile in enumerate(zeilen, start=1):
+            if any(muster in zeile for muster in _BENUTZERPFAD):
+                gefunden.append(
+                    f"{datei.relative_to(WURZEL)}:{nummer}: {zeile.strip()}"
+                )
+
+    assert gefunden == [], (
+        "Diese Zeilen nennen einen absoluten Pfad und damit einen "
+        "Namen:\n" + "\n".join(gefunden)
     )
