@@ -267,23 +267,27 @@ def test_die_frage_beim_loeschen_zaehlt_die_dokumente(fenster: object) -> None:
     beschaefter = dateien.kunde_holen(verbindung, beschaeftigt)
 
     assert frage.frage(ruhiger) == (
-        "„Zeta Tonwerk“ löschen? Der Kunde hat keine Dokumente."
-    )
-    mit_dokumenten = frage.frage(beschaefter)
-    assert "1 Dokumente" in mit_dokumenten
-    assert "Stilllegen" in mit_dokumenten, (
-        "Es wird nicht gesagt, dass Stilllegen die bessere Wahl waere."
+        "„Zeta Tonwerk“ löschen? Der Kunde hat keine Belege."
     )
 
+    erlaubt, erklaerung = frage.darf_loeschen(beschaefter)
+    assert erlaubt is False, "Ein Kunde mit Belegen darf geloescht werden"
+    assert "1 Dokument" in erklaerung
+    assert "Buchhaltung" in erklaerung
 
-def test_loeschen_nimmt_die_dokumente_mit(
+
+def test_ein_kunde_mit_belegen_wird_ueberhaupt_nicht_geloescht(
     fenster: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Der Kunde ist weg, und die Frage hat vorher gewarnt.
+    """Statt *Löschen* gibt es nur noch *Stilllegen*.
+
+    Das ist die eine Stelle im Programm, an der Daten unwiederbringlich
+    weggehen könnten. Sie ist ab jetzt die einzige, an der es überhaupt
+    eine Rückfrage gibt.
 
     Args:
         fenster: Das Fenster.
-        monkeypatch: Zum Beantworten der Frage.
+        monkeypatch: Zum Antworten im Dialog.
     """
     verbindung = fenster.db  # type: ignore[attr-defined]
     kennung = dateien.kunde_speichern(verbindung, {"firma": "Zeta Tonwerk"})
@@ -302,18 +306,97 @@ def test_loeschen_nimmt_die_dokumente_mit(
 
     from faktur.gui.qt import QMessageBox
 
-    monkeypatch.setattr(
-        QMessageBox,
-        "question",
-        staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes),
-    )
+    angeboten: list[list[str]] = []
+
+    def tu_exec(self: object) -> int:
+        """Merkt sich, welche Tasten der Dialog anbietet.
+
+        Args:
+            self: Der Dialog.
+
+        Returns:
+            ``0``, wie bei ``exec()``.
+        """
+        angeboten.append([b.text() for b in self.buttons()])
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", tu_exec)
+    monkeypatch.setattr(QMessageBox, "clickedButton", lambda self: None)
 
     _waehle(seite, 0, "Zeta Tonwerk")
-    assert seite.gewaehlt()["id"] == kennung, "Es ist der falsche Kunde markiert"
-    assert seite.aktionen.loeschen() is True
+    assert seite.aktionen.loeschen() is False, "Er wurde doch geloescht"
 
-    assert dateien.kunden(verbindung) == []
-    assert dateien.dokumente(verbindung) == [], "Die Dokumente sind noch da"
+    assert angeboten, "Es wurde kein Dialog gezeigt"
+    assert "Stilllegen" in angeboten[0], f"Der Dialog bietet nur {angeboten[0]}"
+    assert "Löschen" not in angeboten[0], "Der Dialog bietet *Löschen* an"
+
+    assert len(dateien.kunden(verbindung)) == 1, "Der Kunde wurde geloescht"
+    assert dateien.kundenzahl(verbindung, kennung) == 1, "Die Belege sind weg"
+
+
+def test_und_wer_stilllegt_kriegt_den_kunden_zurueck(
+    fenster: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Dialog ist keine Sackgasse: *Stilllegen* geht auch.
+
+    Args:
+        fenster: Das Fenster.
+        monkeypatch: Zum Antworten im Dialog.
+    """
+    verbindung = fenster.db  # type: ignore[attr-defined]
+    kennung = dateien.kunde_speichern(verbindung, {"firma": "Zeta Tonwerk"})
+    dateien.dokument_speichern(
+        verbindung,
+        {
+            "art": "rechnung",
+            "nummer": "0001",
+            "kunde_id": kennung,
+            "datum": "2026-01-01",
+        },
+        [],
+    )
+
+    seite = _kunden(fenster)
+
+    from faktur.gui.qt import QMessageBox
+
+    def tu_exec(self: object) -> int:
+        """Drueckt auf *Stilllegen*, wie ein Benutzer.
+
+        Args:
+            self: Der Dialog.
+
+        Returns:
+            ``0``, wie bei ``exec()``.
+        """
+        for taste in self.buttons():
+            if taste.text() == "Stilllegen":
+                self.setDefaultButton(taste)
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", tu_exec)
+    monkeypatch.setattr(QMessageBox, "clickedButton", lambda self: _erste_knopf(self))
+
+    _waehle(seite, 0, "Zeta Tonwerk")
+    seite.aktionen.loeschen()
+
+    assert len(dateien.kunden(verbindung)) == 1, "Der Kunde wurde geloescht"
+    assert dateien.kunden(verbindung, nur_aktive=True) == [], (
+        "Der Kunde wurde nicht stillgelegt"
+    )
+    assert dateien.kundenzahl(verbindung, kennung) == 1
+
+
+def _erste_knopf(dialog: object) -> object:
+    """Gibt die erste Taste eines Dialogs zurück.
+
+    Args:
+        dialog: Der Dialog.
+
+    Returns:
+        Die erste Taste.
+    """
+    return dialog.buttons()[0]
 
 
 def test_und_ein_nein_behaelt_alles(

@@ -233,6 +233,59 @@ def durchlauf(fenster: Fenster, app: QApplication, protokoll: Protokoll) -> None
     protokoll.noch_nicht("Einstellungen, Export und Übersicht")
 
 
+def _belege_anlegen(fenster: Fenster, kunde: int) -> None:
+    """Haengt einen Beleg an einen Kunden.
+
+    Args:
+        fenster: Das Fenster.
+        kunde: Die Nummer des Kunden.
+
+    Returns:
+        Nichts.
+    """
+    from faktur import dateien
+
+    dateien.dokument_speichern(
+        fenster.db,
+        {
+            "art": "rechnung",
+            "nummer": dateien.naechste_nummer(fenster.db),
+            "kunde_id": kunde,
+            "datum": "2026-10-01",
+            "faellig": "2026-10-15",
+        },
+        [
+            {
+                "bezeichnung": "Aufnahme Ton",
+                "menge": 1,
+                "einheit": "Tag",
+                "preis": 850,
+            }
+        ],
+    )
+
+
+def _waehle(seite: object, spalte: int, gesucht: str) -> object:
+    """Markiert die Zeile, die in einer Spalte etwas Bestimmtes zeigt.
+
+    Args:
+        seite: Die Liste.
+        spalte: Die Spalte, in der gesucht wird.
+        gesucht: Der Text, nach dem gesucht wird.
+
+    Returns:
+        Der Datensatz der gefundenen Zeile.
+
+    Raises:
+        AssertionError: Wenn keine Zeile passt.
+    """
+    for zeile in range(seite.modell.rowCount()):
+        if seite.modell.waert(zeile, spalte) == gesucht:
+            seite.ansicht.setCurrentIndex(seite.modell.index(zeile, spalte))
+            return seite.modell.datensatz(zeile)
+    raise AssertionError(f'"{gesucht}" steht nicht in der Liste')
+
+
 def _formular_pruefen(
     fenster: Fenster, app: QApplication, protokoll: Protokoll
 ) -> None:
@@ -274,6 +327,12 @@ def _formular_pruefen(
     QMessageBox.question = staticmethod(  # noqa: E731
         lambda *a, **k: QMessageBox.StandardButton.Yes
     )
+
+    # ``exec()`` wartet auf einen Klick, und hier klickt niemand. Ohne das
+    # bliebe der Durchlauf an der Frage hängen, obwohl an *Löschen* gar
+    # keine Frage mehr kommt. Sie wird mit *Abbrechen* beantwortet — der
+    # vorsichtigsten Antwort, die es gibt.
+    QMessageBox.exec = lambda self: 0  # noqa: E731
 
     try:
         seite.aktionen.neu()
@@ -424,6 +483,61 @@ def _formular_pruefen(
             protokoll.ok("Loeschen ohne Markierung tut nichts")
         else:
             protokoll.schlecht("Loeschen", "hat ohne Markierung geloescht")
+        # 5. Ein Kunde mit Belegen wird nicht geloescht.
+        ruhiger = [
+            k for k in dateien.kunden(fenster.db) if k["firma"] == "Soundcheck GmbH"
+        ]
+        if not ruhiger:
+            protokoll.schlecht("Loeschen", "Soundcheck GmbH fehlt")
+            return
+        if dateien.kundenzahl(fenster.db, ruhiger[0]["id"]) == 0:
+            _belege_anlegen(fenster, ruhiger[0]["id"])
+
+        _waehle(seite, 0, "Soundcheck GmbH")
+        erlaubt, erklaerung = seite.aktionen.darf_loeschen(
+            dateien.kunde_holen(fenster.db, ruhiger[0]["id"])
+        )
+        if erlaubt:
+            protokoll.schlecht(
+                "Loeschen", "ein Kunde mit Belegen darf geloescht werden"
+            )
+        else:
+            protokoll.ok("ein Kunde mit Belegen wird nicht geloescht")
+            if "Buchhaltung" in erklaerung:
+                protokoll.ok("und die Frage sagt, warum")
+            else:
+                protokoll.schlecht("Loeschen", f"die Frage sagt nichts: {erklaerung}")
+
+        vorher = len(dateien.kunden(fenster.db))
+        belege = dateien.kundenzahl(fenster.db, ruhiger[0]["id"])
+        if (
+            seite.aktionen.loeschen() is False
+            and len(dateien.kunden(fenster.db)) == vorher
+            and dateien.kundenzahl(fenster.db, ruhiger[0]["id"]) == belege
+        ):
+            protokoll.ok("und die Belege sind noch da")
+        else:
+            protokoll.schlecht("Loeschen", "hat den Kunden mit Belegen doch geloescht")
+
+        # 6. Ein Kunde ohne Belege laesst sich wirklich loeschen.
+        ruhiger = [
+            k for k in dateien.kunden(fenster.db) if k["firma"] == "Zeta Tonwerk"
+        ]
+        if not ruhiger:
+            protokoll.schlecht("Loeschen", "Zeta Tonwerk fehlt")
+            return
+        _waehle(seite, 0, "Zeta Tonwerk")
+        vorher = len(dateien.kunden(fenster.db))
+        if (
+            seite.aktionen.loeschen() is True
+            and len(dateien.kunden(fenster.db)) == vorher - 1
+        ):
+            protokoll.ok("ein Kunde ohne Belege laesst sich loeschen")
+        else:
+            protokoll.schlecht(
+                "Loeschen",
+                f"{vorher} Kunden vor, {len(dateien.kunden(fenster.db))} danach",
+            )
 
         del KundenAktionen
     finally:
