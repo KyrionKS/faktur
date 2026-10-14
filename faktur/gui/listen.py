@@ -13,8 +13,15 @@ from __future__ import annotations
 import sqlite3
 
 from faktur import betraege, dateien, offen
+from faktur.gui.aktionen import (
+    KUNDENFELDER,
+    LEISTUNGFELDER,
+    Bearbeitbar,
+    KundenAktionen,
+    kunden_haken,
+)
 from faktur.gui.seite import ListenSeite
-from faktur.gui.tabelle import Zellen, nach_zahl
+from faktur.gui.tabelle import Eintrag, Zellen, nach_zahl
 
 # --------------------------------------------------------------------- Kunden
 
@@ -46,7 +53,6 @@ class KundenSeite(ListenSeite):
         Args:
             db: Die Datenbankverbindung.
         """
-        self.zeige_auch_archiv = False
         super().__init__(
             db,
             "Kunden",
@@ -55,6 +61,9 @@ class KundenSeite(ListenSeite):
             "Kunden",
             "Kunde",
         )
+        self.zeige_auch_archiv = False
+        self.aktionen = KundenAktionen(self, KUNDENFELDER, "Kunde", "Kunden")
+        kunden_haken(self)
 
     def hole(self) -> list[sqlite3.Row]:
         """Holt die Kunden.
@@ -63,7 +72,81 @@ class KundenSeite(ListenSeite):
             Die Kunden, aktive zuerst und innerhalb einer Gruppe nach Name.
         """
         kunden = dateien.kunden(self.db, nur_aktive=not self.zeige_auch_archiv)
-        return sorted(kunden, key=lambda k: (not k["aktiv"], k["firma"].casefold()))
+        return sorted(
+            kunden,
+            key=lambda k: (not k["aktiv"], k["firma"].casefold()),
+        )
+
+    def als_daten(self, datensatz: Eintrag) -> dict[str, str]:
+        """Macht aus einem Kunden die Werte für das Blatt.
+
+        Args:
+            datensatz: Der Kunde aus der Datenbank.
+
+        Returns:
+            Die Werte.
+        """
+        return {
+            feld.schluessel: str(datensatz[feld.schluessel] or "")
+            for feld in KUNDENFELDER
+        }
+
+    def kennung(self, datensatz: Eintrag) -> int:
+        """Gibt die Nummer des Kunden zurück.
+
+        Args:
+            datensatz: Der Kunde aus der Datenbank.
+
+        Returns:
+            Seine Nummer.
+        """
+        return int(datensatz["id"])
+
+    def speichere_neu(self, daten: dict[str, str]) -> None:
+        """Legt einen Kunden an.
+
+        Args:
+            daten: Die Werte aus dem Blatt.
+
+        Returns:
+            Nichts.
+        """
+        dateien.kunde_speichern(self.db, daten)
+
+    def speichere_alt(self, kennung: int, daten: dict[str, str]) -> None:
+        """Ändert einen Kunden.
+
+        Args:
+            kennung: Seine Nummer.
+            daten: Die Werte aus dem Blatt.
+
+        Returns:
+            Nichts.
+        """
+        dateien.kunde_speichern(self.db, daten, kennung)
+
+    def loesche(self, kennung: int) -> None:
+        """Löscht einen Kunden samt seiner Dokumente.
+
+        Args:
+            kennung: Seine Nummer.
+
+        Returns:
+            Nichts.
+        """
+        dateien.kunde_loeschen(self.db, kennung)
+
+    def stilllege(self, kennung: int, aktiv: bool) -> None:
+        """Legt einen Kunden still oder holt ihn zurück.
+
+        Args:
+            kennung: Seine Nummer.
+            aktiv: Ob er in der Liste stehen soll.
+
+        Returns:
+            Nichts.
+        """
+        dateien.kunde_stilllegen(self.db, kennung, aktiv)
 
 
 # ----------------------------------------------------------------- Leistungen
@@ -95,7 +178,6 @@ class LeistungenSeite(ListenSeite):
         Args:
             db: Die Datenbankverbindung.
         """
-        self.zeige_auch_archiv = False
         super().__init__(
             db,
             "Leistungen",
@@ -105,6 +187,9 @@ class LeistungenSeite(ListenSeite):
             "Leistung",
             vergleiche={2: nach_zahl(2)},
         )
+        self.zeige_auch_archiv = False
+        self.aktionen = Bearbeitbar(self, LEISTUNGFELDER, "Leistung", "Leistungen")
+        kunden_haken(self).setText("auch stillgelegte")
 
     def hole(self) -> list[sqlite3.Row]:
         """Holt die Leistungen.
@@ -117,6 +202,77 @@ class LeistungenSeite(ListenSeite):
             daten,
             key=lambda eine: (not eine["aktiv"], eine["bezeichnung"].casefold()),
         )
+
+    def als_daten(self, datensatz: Eintrag) -> dict[str, str]:
+        """Macht aus einer Leistung die Werte für das Blatt.
+
+        Args:
+            datensatz: Die Leistung aus der Datenbank.
+
+        Returns:
+            Die Werte.
+        """
+        return {
+            feld.schluessel: str(datensatz[feld.schluessel] or "")
+            for feld in LEISTUNGFELDER
+        }
+
+    def kennung(self, datensatz: Eintrag) -> int:
+        """Gibt die Nummer der Leistung zurück.
+
+        Args:
+            datensatz: Die Leistung aus der Datenbank.
+
+        Returns:
+            Ihre Nummer.
+        """
+        return int(datensatz["id"])
+
+    def speichere_neu(self, daten: dict[str, str]) -> None:
+        """Legt eine Leistung an.
+
+        Args:
+            daten: Die Werte aus dem Blatt.
+
+        Returns:
+            Nichts.
+        """
+        dateien.leistung_speichern(self.db, daten)
+
+    def speichere_alt(self, kennung: int, daten: dict[str, str]) -> None:
+        """Ändert eine Leistung.
+
+        Args:
+            kennung: Ihre Nummer.
+            daten: Die Werte aus dem Blatt.
+
+        Returns:
+            Nichts.
+        """
+        dateien.leistung_speichern(self.db, daten, kennung)
+
+    def loesche(self, kennung: int) -> None:
+        """Nimmt eine Leistung aus der Preisliste.
+
+        Args:
+            kennung: Ihre Nummer.
+
+        Returns:
+            Nichts.
+        """
+        dateien.leistung_loeschen(self.db, kennung)
+
+    def stilllege(self, kennung: int, aktiv: bool) -> None:
+        """Legt eine Leistung still oder holt sie zurück.
+
+        Args:
+            kennung: Ihre Nummer.
+            aktiv: Ob sie in der Liste stehen soll.
+
+        Returns:
+            Nichts.
+        """
+        dateien.leistung_stilllegen(self.db, kennung, aktiv)
 
 
 # ------------------------------------------------------------------ Dokumente

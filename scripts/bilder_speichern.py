@@ -182,12 +182,40 @@ def main() -> int:
         app.processEvents()
 
     fenster.fenster.close()
+    geschrieben.append(_formular(verbindung))
     shutil.rmtree(ordner, ignore_errors=True)
 
     print(f"{len(geschrieben)} Bilder in {ZIEL}")  # noqa: T201
     for pfad in geschrieben:
         print(f"  {pfad.name}")  # noqa: T201
     return 0
+
+
+def _formular(verbindung: object) -> Path:
+    """Zeichnet das Blatt fuer einen neuen Kunden.
+
+    Das Blatt ist ein eigenes Fenster und taucht in keinem der
+    Bereichsbilder auf. Wer es nie gesehen hat, glaubt nicht, dass es
+    da ist.
+
+    Args:
+        verbindung: Die Datenbankverbindung.
+
+    Returns:
+        Der Pfad zum Bild.
+    """
+    from faktur.gui.aktionen import KUNDENFELDER
+    from faktur.gui.formular import Formular
+
+    blatt = Formular(verbindung, "Neuer Kunde", KUNDENFELDER, {})
+    blatt.show()
+    app = QApplication.instance()
+    if app is not None:
+        app.processEvents()
+    ziel = ZIEL / "07_formular.png"
+    blatt.grab().save(str(ziel))
+    blatt.close()
+    return ziel
 
 
 if __name__ == "__main__":

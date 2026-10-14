@@ -514,3 +514,83 @@ def als_angebot_uebernehmen(
         )
 
     return kopf, liste
+
+
+# -------------------------------------------------------------- Stilllegen
+
+
+def _aktiv_setzen(
+    db: sqlite3.Connection, tabelle: str, kennung: int, aktiv: bool
+) -> None:
+    """Schaltet einen Datensatz auf aktiv oder stillgelegt.
+
+    **Stilllegen ist nicht Löschen.** Ein Kunde mit fünf Rechnungen und eine
+    Leistung, die auf alten Belegen noch auftaucht, dürfen nicht einfach
+    verschwinden — die Belege würden mit verschwinden. Der Satz bleibt,
+    er taucht nur in keiner Liste mehr auf.
+
+    Bis hierher gab es die Spalte ``aktiv`` in der Datenbank, aber keinen
+    Weg, sie zu setzen. Genau daran lag es, dass niemand sie benutzt hat.
+
+    Args:
+        db: Die Datenbankverbindung.
+        tabelle: ``kunden`` oder ``leistungen``.
+        kennung: Die Nummer des Datensatzes.
+        aktiv: Ob er in den Listen stehen soll.
+
+    Raises:
+        ValueError: Wenn die Tabelle nicht eine der beiden ist.
+    """
+    if tabelle not in ("kunden", "leistungen"):
+        raise ValueError(f"Unbekannte Tabelle: {tabelle}")
+
+    db.execute(
+        f"UPDATE {tabelle} SET aktiv = ? WHERE id = ?",  # noqa: S608
+        (1 if aktiv else 0, kennung),
+    )
+    db.commit()
+
+
+def kunde_stilllegen(
+    db: sqlite3.Connection, kunde_id: int, aktiv: bool = False
+) -> None:
+    """Legt einen Kunden still oder holt ihn zurück.
+
+    Args:
+        db: Die Datenbankverbindung.
+        kunde_id: Die Nummer des Kunden.
+        aktiv: ``False`` legt still, ``True`` holt zurück.
+    """
+    _aktiv_setzen(db, "kunden", kunde_id, aktiv)
+
+
+def leistung_stilllegen(
+    db: sqlite3.Connection, leistung_id: int, aktiv: bool = False
+) -> None:
+    """Legt eine Leistung still oder holt sie zurück.
+
+    Args:
+        db: Die Datenbankverbindung.
+        leistung_id: Die Nummer der Leistung.
+        aktiv: ``False`` legt still, ``True`` holt zurück.
+    """
+    _aktiv_setzen(db, "leistungen", leistung_id, aktiv)
+
+
+def kundenzahl(db: sqlite3.Connection, kunde_id: int) -> int:
+    """Zählt, wie viele Dokumente an einem Kunden hängen.
+
+    Für die Frage vor dem Löschen. Ein Kunde ohne Belege kann weg, einer
+    mit fünf nicht — und das kann man nur wissen, wenn man nachzählt.
+
+    Args:
+        db: Die Datenbankverbindung.
+        kunde_id: Die Nummer des Kunden.
+
+    Returns:
+        Die Zahl seiner Angebote und Rechnungen zusammen.
+    """
+    zeile = db.execute(
+        "SELECT COUNT(*) FROM dokumente WHERE kunde_id = ?", (kunde_id,)
+    ).fetchone()
+    return int(zeile[0]) if zeile else 0

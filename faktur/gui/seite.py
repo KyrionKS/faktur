@@ -295,3 +295,120 @@ class ListenSeite(Seite):
             Der Datensatz, oder ``None``, wenn nichts markiert ist.
         """
         return self.modell.datensatz(self.ansicht.currentIndex().row())
+
+    # ------------------------------------------------- haefft fuer Aktionen
+
+    def melde(self, text: str) -> None:
+        """Schreibt einen Satz in die Statuszeile des Fensters.
+
+        Args:
+            text: Was geschehen ist.
+
+        Returns:
+            Nichts.
+        """
+        fenster = self.window()
+        while fenster is not None and not hasattr(fenster, "melde"):
+            fenster = fenster.parent()
+        if fenster is not None:
+            fenster.melde(text)  # type: ignore[attr-defined]
+
+    def unten_add(self, teil: object) -> None:
+        """Setzt etwas unter die Liste.
+
+        Args:
+            teil: Das Widget, etwa einen Haken.
+
+        Returns:
+            Nichts.
+        """
+        self._koerper.addWidget(teil)  # type: ignore[arg-type]
+
+    def zeige_auch_archiv_setzen(self, wert: bool) -> None:
+        """Schaltet um, ob die stillgelegten Datensätze mitkommen.
+
+        Args:
+            wert: ``True`` zeigt sie mit.
+
+        Returns:
+            Nichts.
+        """
+        self.zeige_auch_archiv = wert
+        self.erneut_laden()
+
+    # ------------------------------------------- was die Seiten selbst tun
+
+    def als_daten(self, datensatz: Eintrag) -> dict[str, str]:
+        """Macht aus einem Datensatz die Werte für ein Formular.
+
+        Args:
+            datensatz: Der Datensatz aus der Datenbank.
+
+        Returns:
+            Die Werte, wie sie in der Datenbank heißen.
+        """
+        return {}
+
+    def kennung(self, datensatz: Eintrag) -> int:
+        """Gibt die Nummer eines Datensatzes zurück.
+
+        Args:
+            datensatz: Der Datensatz aus der Datenbank.
+
+        Returns:
+            Seine Nummer.
+        """
+        return 0
+
+    def name(self, daten: dict[str, str]) -> str:
+        """Gibt den Namen zurück, wie er in einer Frage steht.
+
+        Args:
+            daten: Die Werte des Datensatzes.
+
+        Returns:
+            Der Name.
+        """
+        return daten.get("firma") or daten.get("bezeichnung") or ""
+
+    def speichere_neu(self, daten: dict[str, str]) -> None:
+        """Legt einen neuen Datensatz an.
+
+        Args:
+            daten: Die Werte aus dem Formular.
+
+        Returns:
+            Nichts.
+        """
+
+    def speichere_alt(self, kennung: int, daten: dict[str, str]) -> None:
+        """Ändert einen bestehenden Datensatz.
+
+        Args:
+            kennung: Seine Nummer.
+            daten: Die Werte aus dem Formular.
+
+        Returns:
+            Nichts.
+        """
+
+    def loesche(self, kennung: int) -> None:
+        """Löscht einen Datensatz.
+
+        Args:
+            kennung: Seine Nummer.
+
+        Returns:
+            Nichts.
+        """
+
+    def stilllege(self, kennung: int, aktiv: bool) -> None:
+        """Legt einen Datensatz still oder holt ihn zurück.
+
+        Args:
+            kennung: Seine Nummer.
+            aktiv: Ob er in den Listen stehen soll.
+
+        Returns:
+            Nichts.
+        """

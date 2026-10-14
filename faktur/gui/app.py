@@ -50,6 +50,12 @@ _STYLE = """
 #suchzeile, #zweit {
     color: palette(mid);
 }
+
+/* Die eine Taste, um die es geht. Nur fett — eine eigene Farbe sähe
+   auf dem Mac aus wie ein Fremdkörper. */
+#haupt {
+    font-weight: bold;
+}
 """
 
 

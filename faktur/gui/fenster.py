@@ -239,9 +239,25 @@ class Fenster:
         """
         datei = leiste.addMenu("&Datei")
 
-        self._taste(datei, "Neuer Kunde", "Ctrl+Shift+K")
+        self._taste(datei, "Neuer Kunde", "Ctrl+Shift+K", self._neu)
         self._taste(datei, "Neues Angebot", "Ctrl+N")
         self._taste(datei, "Aus Angebot abrechnen", "Ctrl+Shift+R")
+
+        datei.addSeparator()
+
+        aendern = QAction("Ändern", self.fenster)
+        aendern.setShortcut("Ctrl+E")
+        aendern.triggered.connect(self._aendern)
+        datei.addAction(aendern)
+
+        loeschen = QAction("Löschen", self.fenster)
+        loeschen.setShortcut("Backspace")
+        loeschen.triggered.connect(self._loeschen)
+        datei.addAction(loeschen)
+
+        stilllegen = QAction("Stilllegen", self.fenster)
+        stilllegen.triggered.connect(self._stilllegen)
+        datei.addAction(stilllegen)
 
         datei.addSeparator()
 
@@ -315,19 +331,30 @@ class Fenster:
         beenden.triggered.connect(self.fenster.close)
         faktur.addAction(beenden)
 
-    def _taste(self, menue: QMenu, text: str, kuerzel: str) -> QAction:
+    def _taste(
+        self,
+        menue: QMenu,
+        text: str,
+        kuerzel: str,
+        was: object = None,
+    ) -> QAction:
         """Setzt einen Menüpunkt.
 
         Args:
             menue: Das Menü, in das er kommt.
             text: Was darauf steht.
             kuerzel: Das Tastenkürzel.
+            was: Wird gerufen, wenn der Punkt gewählt wird. Ohne Angabe
+                bleibt der Punkt vorerst ohne Wirkung — er steht schon da,
+                seine Tat kommt mit der Stufe, die sie baut.
 
         Returns:
             Der Menüpunkt.
         """
         aktion = QAction(text, self.fenster)
         aktion.setShortcut(kuerzel)
+        if was is not None:
+            aktion.triggered.connect(was)  # type: ignore[arg-type]
         menue.addAction(aktion)
         return aktion
 
@@ -351,6 +378,65 @@ class Fenster:
         aktion = getattr(self, "_sprung", {}).get(schluessel)
         if aktion is not None:
             aktion.setChecked(True)
+
+    def _aktion(self, name: str) -> object:
+        """Holt eine der vier Aktionen der aktuellen Seite.
+
+        Nicht jede Seite kann alles: Die Dokumentenliste kann nichts
+        anlegen. Für sie gibt es nur *Ändern*, und das kommt mit dem
+        Dokumentfenster in einer späteren Stufe.
+
+        Args:
+            name: ``neu``, ``aendern``, ``loeschen`` oder ``stilllegen``.
+
+        Returns:
+            Die Methode, die man aufrufen kann, oder ``None``.
+        """
+        aktionen = getattr(self.seite(), "aktionen", None)
+        if aktionen is None:
+            self.melde("Diese Liste lässt sich hier nicht bearbeiten.")
+            return None
+        return getattr(aktionen, name, None)
+
+    def _neu(self) -> None:
+        """Legt einen neuen Eintrag an.
+
+        Returns:
+            Nichts.
+        """
+        was = self._aktion("neu")
+        if was is not None:
+            was()
+
+    def _aendern(self) -> None:
+        """Ändert den markierten Eintrag.
+
+        Returns:
+            Nichts.
+        """
+        was = self._aktion("aendern")
+        if was is not None:
+            was()
+
+    def _loeschen(self) -> None:
+        """Löscht den markierten Eintrag.
+
+        Returns:
+            Nichts.
+        """
+        was = self._aktion("loeschen")
+        if was is not None:
+            was()
+
+    def _stilllegen(self) -> None:
+        """Legt den markierten Eintrag still.
+
+        Returns:
+            Nichts.
+        """
+        was = self._aktion("stilllegen")
+        if was is not None:
+            was()
 
     def _suchen(self) -> None:
         """Springt in das Suchfeld der aktuellen Seite.

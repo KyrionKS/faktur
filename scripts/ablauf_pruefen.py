@@ -228,9 +228,209 @@ def durchlauf(fenster: Fenster, app: QApplication, protokoll: Protokoll) -> None
     for _schluessel, titel, _kuerzel in BEREICHE:
         if not hasattr(fenster.seiten[_schluessel], "modell"):
             protokoll.noch_nicht(f"Bereich {titel} hat noch keinen Inhalt")
-    protokoll.noch_nicht("Formulare: kein Neuer Kunde, kein Ändern, kein Löschen")
+    _formular_pruefen(fenster, app, protokoll)
     protokoll.noch_nicht("Dokumenteditor als eigenes Fenster")
     protokoll.noch_nicht("Einstellungen, Export und Übersicht")
+
+
+def _formular_pruefen(
+    fenster: Fenster, app: QApplication, protokoll: Protokoll
+) -> None:
+    """Legt einen Kunden an, ändert ihn, legt ihn still und holt ihn zurück.
+
+    Die Fragen werden beantwortet wie am Bildschirm: das Blatt wird
+    ausgefüllt, die Rückfrage mit *Ja* bestätigt.
+
+    Args:
+        fenster: Das Fenster.
+        app: Die Anwendung, damit Qt zwischen den Schritten rechnen kann.
+        protokoll: Wohin die Ergebnisse kommen.
+
+    Returns:
+        Nichts.
+    """
+    from faktur import dateien
+    from faktur.gui.aktionen import KundenAktionen
+    from faktur.gui.formular import Formular
+    from faktur.gui.qt import QMessageBox
+
+    fenster.gehe("kunden")
+    app.processEvents()
+    seite = fenster.seite()
+    vorher = seite.modell.rowCount()
+
+    # 1. Anlegen. Das Blatt wird mit Werten gefuellt statt getippt.
+    Formular.werte = lambda self: {  # noqa: E731
+        "firma": "Bildberichtung GmbH",
+        "ansprechpartner": "",
+        "strasse": "",
+        "plz": "",
+        "ort": "Muenchen",
+        "email": "",
+        "telefon": "",
+        "notiz": "",
+    }
+    Formular.exec = lambda self: Formular.DialogCode.Accepted  # noqa: E731
+    QMessageBox.question = staticmethod(  # noqa: E731
+        lambda *a, **k: QMessageBox.StandardButton.Yes
+    )
+
+    try:
+        seite.aktionen.neu()
+        app.processEvents()
+        if seite.modell.rowCount() == vorher + 1:
+            protokoll.ok("Kunde anlegen")
+        else:
+            protokoll.schlecht(
+                "Kunde anlegen", f"{vorher} -> {seite.modell.rowCount()}"
+            )
+
+        # 2. Aendern. Der Kunde muss derselbe bleiben, nicht ein zweiter.
+        gefunden = [
+            zeile
+            for zeile in range(seite.modell.rowCount())
+            if seite.modell.waert(zeile, 0) == "Bildberichtung GmbH"
+        ]
+        if not gefunden:
+            protokoll.schlecht(
+                "Kunde aendern", "der neue Kunde steht nicht in der Liste"
+            )
+            return
+        seite.ansicht.setCurrentIndex(seite.modell.index(gefunden[0], 0))
+        Formular.werte = lambda self: (
+            dict.fromkeys(  # noqa: E731
+                (
+                    "firma",
+                    "ansprechpartner",
+                    "strasse",
+                    "plz",
+                    "ort",
+                    "email",
+                    "telefon",
+                    "notiz",
+                ),
+                "",
+            )
+            | {"firma": "Bildberichtung AG"}
+        )
+        anzahl_vorher = len(dateien.kunden(fenster.db))
+        seite.aktionen.aendern()
+        app.processEvents()
+        anzahl_nachher = len(dateien.kunden(fenster.db))
+        if anzahl_vorher == anzahl_nachher and "Bildberichtung AG" in [
+            k["firma"] for k in dateien.kunden(fenster.db)
+        ]:
+            protokoll.ok("Kunde aendern, ohne einen zweiten anzulegen")
+        else:
+            protokoll.schlecht(
+                "Kunde aendern",
+                f"{anzahl_vorher} Kunden vor, {anzahl_nachher} danach",
+            )
+
+        # 3. Stilllegen. Der Kunde verschwindet aus der Liste, nicht aus
+        #    der Datenbank — und kommt ueber den Haken wieder.
+        gefunden = [
+            zeile
+            for zeile in range(seite.modell.rowCount())
+            if seite.modell.waert(zeile, 0) == "Bildberichtung AG"
+        ]
+        if not gefunden:
+            protokoll.schlecht(
+                "Stilllegen", "der geaenderte Kunde steht nicht in der Liste"
+            )
+            return
+        seite.ansicht.setCurrentIndex(seite.modell.index(gefunden[0], 0))
+        mit_dem = seite.modell.rowCount()
+        seite.aktionen.stilllegen()
+        app.processEvents()
+
+        if seite.modell.rowCount() == mit_dem - 1:
+            protokoll.ok("Stilllegen nimmt ihn aus der Liste")
+        else:
+            protokoll.schlecht(
+                "Stilllegen", f"{mit_dem} -> {seite.modell.rowCount()} Zeilen"
+            )
+
+        if len(dateien.kunden(fenster.db)) == mit_dem:
+            protokoll.ok("Der stillgelegte Kunde ist in der Datenbank geblieben")
+        else:
+            protokoll.schlecht(
+                "Stilllegen", "der Kunde wurde geloescht statt stillgelegt"
+            )
+
+        # Steht er nicht mehr drin, war das stilllegen. Steht er noch da,
+        # hat es den falschen Kunden erwischt.
+        gefunden = [
+            zeile
+            for zeile in range(seite.modell.rowCount())
+            if seite.modell.waert(zeile, 0) == "Bildberichtung AG"
+        ]
+        if gefunden:
+            protokoll.schlecht(
+                "Stilllegen",
+                "er steht noch in der Liste — es wurde der falsche Kunde stillgelegt",
+            )
+            return
+
+        # Er ist draussen. Jetzt ueber den Haken wieder herein und zurueck.
+        seite.zeige_auch_archiv_setzen(True)
+        app.processEvents()
+        gefunden = [
+            zeile
+            for zeile in range(seite.modell.rowCount())
+            if seite.modell.waert(zeile, 0) == "Bildberichtung AG"
+        ]
+        if not gefunden:
+            protokoll.schlecht(
+                "Haken", "der stillgelegte Kunde kommt mit „auch stillgelegte“ nicht"
+            )
+            return
+        seite.ansicht.setCurrentIndex(seite.modell.index(gefunden[0], 0))
+        kennung = seite.gewaehlt()["id"]
+        seite.aktionen.stilllegen()
+        app.processEvents()
+
+        # Zaehlt nicht die Zeilen: Mit dem Haken stehen ohnehin alle da.
+        # Zaehlt, was in der Datenbank steht.
+        if dateien.kunde_holen(fenster.db, kennung)["aktiv"]:
+            protokoll.ok("Stilllegen rueckgaengig, er ist wieder aktiv")
+        else:
+            protokoll.schlecht(
+                "Stilllegen rueckgaengig", "er ist weiterhin stillgelegt"
+            )
+
+        seite.zeige_auch_archiv_setzen(False)
+        app.processEvents()
+        gefunden = [
+            zeile
+            for zeile in range(seite.modell.rowCount())
+            if seite.modell.waert(zeile, 0) == "Bildberichtung AG"
+        ]
+        if gefunden:
+            protokoll.ok("und ohne den Haken wieder in der normalen Liste")
+        else:
+            protokoll.schlecht(
+                "Stilllegen rueckgaengig", "er fehlt auch ohne den Haken"
+            )
+
+        # 4. Loeschen. Ohne Markierung wird nichts geloescht.
+        seite.ansicht.clearSelection()
+        seite.ansicht.setCurrentIndex(seite.modell.index(-1, -1))
+        vorher = len(dateien.kunden(fenster.db))
+        if (
+            seite.aktionen.loeschen() is False
+            and len(dateien.kunden(fenster.db)) == vorher
+        ):
+            protokoll.ok("Loeschen ohne Markierung tut nichts")
+        else:
+            protokoll.schlecht("Loeschen", "hat ohne Markierung geloescht")
+
+        del KundenAktionen
+    finally:
+        import faktur.gui.formular as formular_modul
+
+        formular_modul.Formular.werte = Formular.werte
+        del formular_modul
 
 
 def main() -> int:
