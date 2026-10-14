@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 
 from faktur import __version__
-from faktur.app import main
+from faktur.gui.app import main
 
 
 def _version_gewuenscht(argumente: list[str]) -> bool:
@@ -29,4 +29,4 @@ if __name__ == "__main__":
     if _version_gewuenscht(sys.argv[1:]):
         print(f"Faktur {__version__}")  # noqa: T201
     else:
-        main()
+        raise SystemExit(main(sys.argv))

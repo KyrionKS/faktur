@@ -12,3 +12,7 @@ daten/
 
 # Die Beispieldateien lassen sich jederzeit neu erzeugen
 beispiele/
+
+# Die Bildschirmbilder aus scripts/bilder_speichern.py. Sie sind jedes Mal
+# neu, und sie gehören nicht ins Repository.
+bilder/

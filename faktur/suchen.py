@@ -10,16 +10,18 @@ Enter nötig, weil bei zwanzig Kunden niemand einen Dialog möchte.
 
 Suchen lässt sich nur sinnvoll auf einer Liste, die auch sonst da ist — nicht
 nach etwas, das es nicht gibt. Deshalb gibt es hier eine einzige Liste, und
-jeder Bildschirm, der eine hat, benutzt sie.
+jede Seite, die eine hat, benutzt sie.
+
+**Hier steht nur die Regel, keine Oberfläche.** Das Suchfeld selbst liegt in
+:mod:`faktur.gui.suchen`. Diese Trennung ist Absicht: Die Regel *was passt
+zusammen* lässt sich ohne Fenster prüfen, und der ganze Rest des Programms
+prüft sie ohne Fenster.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import TypeVar
-
-from textual.binding import Binding
-from textual.widgets import Input, Static
 
 #: Der Datensatz, zu dem eine Zeile gehoert. Ein Kunde, ein Dokument — was
 #: auch immer die Liste gerade zeigt. Nur fuer die Typangabe, damit ein
@@ -119,84 +121,3 @@ def sichtbar(
         for datensatz, zeile in zip(datensaetze, zeilen, strict=True)
         if passt(zeile, begriff)
     ]
-
-
-class Suchfeld(Input):
-    """Ein Eingabefeld, das sofort filtert.
-
-    Es meldet jede Änderung an die Liste, ohne dass man etwas bestätigen
-    muss. Bei zwanzig Kunden ist ein Dialog lästig; bei zweihundert ist die
-    Liste ohne Suchfeld unbrauchbar.
-
-    Attributes:
-        geaendert: Wird mit dem aktuellen Begriff gerufen.
-    """
-
-    BINDINGS = [Binding("escape", "leeren", "Suche leeren", show=False)]
-
-    def __init__(
-        self, geaendert: Callable[[str], None], platzhalter: str = "suchen"
-    ) -> None:
-        """Legt das Feld an.
-
-        Args:
-            geaendert: Wird gerufen, sobald sich der Text ändert.
-            platzhalter: Der Text, solange nichts getippt ist.
-        """
-        super().__init__(placeholder=platzhalter, id="suche")
-        self.geaendert = geaendert
-        self.add_class("suchfeld")
-
-    def on_input_changed(self, event: Input.Changed) -> None:
-        """Sucht weiter, während getippt wird.
-
-        Args:
-            event: Die Nachricht des Eingabefeldes.
-        """
-        event.stop()
-        self.geaendert(event.value)
-
-    def action_leeren(self) -> None:
-        """Leert das Feld und sucht wieder alles."""
-        self.value = ""
-        self.geaendert("")
-
-
-class SuchZeile(Static):
-    """Die Zeile, die sagt, wie viele Zeilen übrig sind."""
-
-    def zeige(
-        self,
-        gefunden: int,
-        gesamt: int,
-        begriff: str,
-        einheit: str = "Einträge",
-        einzeln: str = "Eintrag",
-    ) -> None:
-        """Sagt an, wie viel die Suche übrig gelassen hat.
-
-        Ohne Suchbegriff steht dort einfach, wie viele es gibt. Bei null
-        Treffern steht das ausdrücklich da — eine leere Liste sieht sonst
-        aus, als sei das Programm kaputt.
-
-        Args:
-            gefunden: Wie viele Zeilen passen.
-            gesamt: Wie viele es insgesamt gab.
-            begriff: Was gesucht wurde.
-            einheit: Die Pluralform, zum Beispiel *Dokumente*.
-            einzeln: Die Singularform, zum Beispiel *Dokument*.
-        """
-        if not begriff.strip():
-            self.update(f"{gesamt} {einzeln if gesamt == 1 else einheit}.")
-            self.set_class(False, "leer")
-            return
-
-        if gefunden == 0:
-            self.update(f"{gesamt} gefunden. Nichts passt zu „{begriff}“.")
-            self.set_class(True, "leer")
-        elif gefunden < gesamt:
-            self.update(f"{gefunden} von {gesamt} passen zu „{begriff}“.")
-            self.set_class(False, "leer")
-        else:
-            self.update(f"Alle {gesamt} passen zu „{begriff}“.")
-            self.set_class(False, "leer")

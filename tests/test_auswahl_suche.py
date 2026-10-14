@@ -16,19 +16,12 @@ trägt. Genau darum steht hier auch, dass es so bleibt.
 
 from __future__ import annotations
 
+import os
 import sqlite3
 
 import pytest
 from faktur import dateien
 from faktur.suchen import passt
-
-#: Der Bildschirm, um den es hier geht.
-QUELLE = (
-    __import__("pathlib").Path(__file__).resolve().parents[1]
-    / "faktur"
-    / "screens"
-    / "dokumente.py"
-).read_text(encoding="utf-8")
 
 #: Zwei Leistungen, die auf dem Papier gleich aussehen.
 DOPPELT_A = ("Mischung und Mastering", "Stunde", "950,00 €")
@@ -155,41 +148,87 @@ def test_das_programm_hat_keine_sperre_gegen_doppelte_leistungen(
     assert len(dateien.leistungen(verbindung)) >= 3
 
 
-# ------------------------------------------------------- die Bildschirme
+# ------------------------------------------------- im Modell des Fensters
 
 
-def test_der_kundenschritt_traegt_die_kennung_mit() -> None:
-    """Auch im Editor wird die Kennung aus dem Datensatz geholt.
+def test_das_modell_behaelt_auch_gleiche_zeilen_auseinander() -> None:
+    """Der Grund, warum es im Fenster kein ``QSortFilterProxyModel`` gibt.
 
-    Die Zeile, die der Auswahl gegeben wird, traegt die Kennung des Kunden
-    an erster Stelle. Nach dem Filtern wird sie neu gesetzt — aus dem
-    Datensatz, nicht aus der Zeile. So kann sich die Anzeige aendern, ohne
-    dass ein Tastendruck ploetzlich jemand anderen meint.
-
-    Args:
-        None
-    """
-    quelle = QUELLE
-
-    assert 'str(kunde["id"]),\n' in quelle, (
-        "Die Kundenauswahl traegt die Kennung nicht mehr am Anfang der Zeile."
-    )
-    assert "for neu, (kunde, zeile) in enumerate(paare, 1)" in quelle, (
-        "Die Nummer wird nicht mehr aus dem Paar von Datensatz und Zeile "
-        "gewonnen. Damit haengt die Tastenzuordnung an der Anzeige."
-    )
-
-
-def test_der_leistungsschritt_filtert_ueber_indizes() -> None:
-    """Hier wird es um die Indizes gemacht.
+    Zwei Leistungen koennen gleich aussehen. Das Modell haelt beide, weil es
+    zu jeder Zeile den Datensatz daneben ablegt. Ein Filter, der nur die
+    Zeilen kennt, wuerde eine davon verschlucken — und wer die zweite
+    anwuerde, bekomme die dritte.
 
     Args:
         None
     """
-    quelle = QUELLE
+    pytest.importorskip("PySide6")
+    os.environ.setdefault("QT_QPA_PLATFORM", "minimal")
 
-    assert "self.leistungen[event.zeile]" not in quelle, (
-        "Hier wird noch ueber die vollstaendige Liste indexiert. Nach dem "
-        "Filtern waere das die falsche Leistung."
-    )
-    assert "self.sichtbar[event.zeile]" in quelle
+    from faktur.gui.tabelle import ZeilenModell
+
+    zellen = lambda d: [d["bezeichnung"], d["einheit"], d["preis"]]  # noqa: E731
+    modell = ZeilenModell(("Bezeichnung", "Einheit", "Preis"), zellen)
+    erste = {"bezeichnung": "Mischung", "einheit": "Stunde", "preis": "950,00 €"}
+    zweite = {"bezeichnung": "Mischung", "einheit": "Stunde", "preis": "950,00 €"}
+    dritte = {"bezeichnung": "Aufnahme", "einheit": "Tag", "preis": "850,00 €"}
+    modell.setze([erste, zweite, dritte])
+
+    assert modell.rowCount() == 3
+    assert modell.datensatz(0) is erste
+    assert modell.datensatz(1) is zweite
+    assert modell.datensatz(2) is dritte
+
+
+def test_nach_dem_sortieren_steht_der_datensatz_hinter_seiner_zeile() -> None:
+    """Der Fehler aus 0.8.1, an seiner eigentlichen Stelle.
+
+    Die Liste, die das Modell haelt, wird sortiert — nicht die Anzeige. Wer
+    zurueckspringt, bekommt damit immer den Datensatz, dessen Zeile er
+    sieht.
+
+    Args:
+        None
+    """
+    pytest.importorskip("PySide6")
+    os.environ.setdefault("QT_QPA_PLATFORM", "minimal")
+
+    from faktur.gui.tabelle import ZeilenModell, nach_text
+
+    zellen = lambda d: [d["firma"]]  # noqa: E731
+    modell = ZeilenModell(("Firma",), zellen, {0: nach_text(0)})
+    tonwerk = {"firma": "Zeta Tonwerk"}
+    klang = {"firma": "Alpha Klangstudio"}
+    modell.setze([tonwerk, klang])
+
+    modell.sortiere(0, True)
+
+    for zeile in range(modell.rowCount()):
+        angezeigt = modell.waert(zeile, 0)
+        dahinter = modell.datensatz(zeile)
+        assert dahinter is not None
+        assert dahinter["firma"] == angezeigt
+
+
+def test_ein_klick_ins_leere_faesst_nichts_an() -> None:
+    """Zeile 99 in einer Liste mit zwei Zeilen.
+
+    Ohne diese Schranke waere ``datensatz(99)`` ein Indexfehler mitten in
+    einem Tastendruck — oder, schlimmer, der erste Datensatz der Liste.
+
+    Args:
+        None
+    """
+    pytest.importorskip("PySide6")
+    os.environ.setdefault("QT_QPA_PLATFORM", "minimal")
+
+    from faktur.gui.tabelle import ZeilenModell
+
+    modell = ZeilenModell(("Firma",), lambda d: [d["firma"]])
+    tonwerk = {"firma": "Zeta Tonwerk"}
+    modell.setze([tonwerk])
+
+    assert modell.datensatz(99) is None
+    assert modell.datensatz(-1) is None
+    assert modell.zeile(tonwerk) == 0
+    assert modell.zeile({"firma": "Zeta Tonwerk"}) == -1

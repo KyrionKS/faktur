@@ -1,0 +1,114 @@
+"""Der eine Ort, an dem Qt hereinkommt.
+
+Überall sonst im Programm steht kein ``from PySide6...``, sondern nur
+``from faktur.gui.qt import ...``. Zwei Gründe:
+
+- Beim Testen reicht **ein** ``importorskip``, um die ganze Oberfläche zu
+  überspringen. Fehlt PySide6, laufen die Tests der Fachlogik trotzdem.
+- Es steht an einer Stelle, welche Bausteine das Programm braucht. Das ist
+  beim Aufrüsten von Qt die erste Liste, die man liest.
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import (
+    QAbstractTableModel,
+    QModelIndex,
+    QSettings,
+    Qt,
+    QTimer,
+)
+from PySide6.QtGui import (
+    QAction,
+    QActionGroup,
+    QCloseEvent,
+    QFont,
+    QIcon,
+    QKeyEvent,
+    QKeySequence,
+    QPainter,
+    QPixmap,
+)
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMenu,
+    QMenuBar,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QSplitter,
+    QStackedWidget,
+    QStatusBar,
+    QTableView,
+    QTabWidget,
+    QTextEdit,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
+)
+
+__all__ = [
+    "QAbstractItemView",
+    "QAbstractTableModel",
+    "QAction",
+    "QActionGroup",
+    "QApplication",
+    "QCheckBox",
+    "QCloseEvent",
+    "QComboBox",
+    "QDialog",
+    "QDialogButtonBox",
+    "QFileDialog",
+    "QFont",
+    "QFormLayout",
+    "QGridLayout",
+    "QGroupBox",
+    "QHBoxLayout",
+    "QHeaderView",
+    "QIcon",
+    "QKeyEvent",
+    "QKeySequence",
+    "QLabel",
+    "QLineEdit",
+    "QListWidget",
+    "QListWidgetItem",
+    "QMainWindow",
+    "QMenu",
+    "QMenuBar",
+    "QMessageBox",
+    "QModelIndex",
+    "QPainter",
+    "QPixmap",
+    "QPushButton",
+    "QScrollArea",
+    "QSettings",
+    "QSpinBox",
+    "QSplitter",
+    "QStackedWidget",
+    "QStatusBar",
+    "QTableView",
+    "QTabWidget",
+    "QTextEdit",
+    "QTimer",
+    "QToolBar",
+    "QVBoxLayout",
+    "QWidget",
+    "Qt",
+]

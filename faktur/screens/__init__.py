@@ -1,1 +1,0 @@
-"""Die Bildschirme der App."""

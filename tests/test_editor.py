@@ -69,22 +69,3 @@ def test_platzhalter_werden_im_gespeicherten_text_gefunden() -> None:
     gefunden = texte.unbekannte(text)
 
     assert gefunden == ["Kuude", "Gruss"]
-
-
-def test_textarea_thema_laesst_sich_registrieren() -> None:
-    """Das Theme muss angemeldet werden, sonst findet Textual es nicht.
-
-    ``TextArea.theme`` nimmt nur den Namen an. Wer das Objekt selbst
-    übergeben will, scheitert mit ``unhashable type``.
-    """
-    from rich.style import Style
-    from textual.widgets import TextArea
-    from textual.widgets.text_area import TextAreaTheme
-
-    feld = TextArea()
-    feld.register_theme(
-        TextAreaTheme(name="probe", base_style=Style.parse("bold white"))
-    )
-    feld.theme = "probe"
-
-    assert feld.theme == "probe"

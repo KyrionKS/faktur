@@ -24,6 +24,8 @@ import sys
 import venv
 from pathlib import Path
 
+import faktur
+
 #: Hier liegt das Programm. Nach dem Auspacken ist das der Ordner, in dem
 #: das Skript steht.
 WURZEL = Path(__file__).resolve().parent
@@ -157,7 +159,7 @@ def text_start() -> str:
             "Erster Start. Die Bibliotheken werden einmal geholt, das dauert "
             "etwas.\nDanach geht es sofort los."
         )
-    return "Faktur 0.4.0"
+    return f"Faktur {faktur.__version__}"
 
 
 def text_logo() -> str:

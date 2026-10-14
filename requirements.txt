@@ -4,12 +4,19 @@
 # Je weniger hier steht, desto kleiner wird das fertige Programm, und
 # desto weniger kann beim Bauen schiefgehen.
 #
-# ``rich`` wird dreimal direkt importiert (``Style``, ``Text``) und stand
-# bis 0.8.2 nicht hier. Es lief nur, weil Textual es zufaellig mitzieht —
-# ohne diese Zeile haette der erste, der Textual aufruestet, ein
-# ``ModuleNotFoundError`` bekommen. tests/test_skripte.py waechtert das.
+# PySide6 statt PySide6: Das volle Paket bringt WebEngine, Qt3D und den
+# Designer mit. Kein Fenster von Faktur braucht davon etwas. Gemessen auf
+# Linux aarch64 mit PySide6 6.12.0:
+#
+#     PySide6 (voll)      676 MB
+#     PySide6-Essentials  248 MB     — 428 MB weniger
+#
+# Essentials enthaelt QtCore, QtGui, QtWidgets und QtPrintSupport, also
+# alles, was hier vorkommt. Gemessen und nicht angenommen: Fenster,
+# Seitenleiste, Menues, Listen und Einstellungen laufen damit.
+# tests/test_skripte.py waechtert, dass hier kein ``PySide6`` ohne
+# ``-Essentials`` steht.
 
 pillow==12.3.0
+PySide6-Essentials==6.12.0
 reportlab==5.0.1
-rich==15.0.0
-textual==8.2.8

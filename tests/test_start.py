@@ -15,6 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import faktur
 import pytest
 import start
 
@@ -228,6 +229,23 @@ def test_beim_zweiten_start_wird_nichts_angekuendigt(
     monkeypatch.setattr(start, "hole_datenbank", lambda: Path("da"))
 
     assert "Erster Start" not in start.text_start()
+
+
+def test_und_es_steht_die_echte_version_da(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bis 0.9.0 stand hier fest ``Faktur 0.4.0``.
+
+    Fünf Fassungen lang. Der Test daneben prüfte nur, dass *Erster Start*
+    **nicht** im Text steht — und diese zweite Hälfte des Textes hat
+    niemand gelesen. Seit 0.10 kommt die Nummer aus ``faktur.__version__``.
+
+    Args:
+        monkeypatch: Zum Vortaeuschen einer vorhandenen Datenbank.
+    """
+    monkeypatch.setattr(start, "hole_datenbank", lambda: Path("da"))
+
+    assert start.text_start() == f"Faktur {faktur.__version__}"
 
 
 def test_ohne_logo_gibt_es_einen_hinweis(monkeypatch: pytest.MonkeyPatch) -> None:

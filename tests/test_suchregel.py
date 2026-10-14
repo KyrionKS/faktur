@@ -18,7 +18,8 @@ Stelle im ganzen Projekt gibt, an der diese Falle überhaupt entstehen kann.
 
 from __future__ import annotations
 
-import ast
+import os
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -27,12 +28,9 @@ from faktur.suchen import sichtbar
 
 #: Wurzels des Projekts.
 WURZEL = Path(__file__).resolve().parents[1]
-SCREENS = WURZEL / "faktur" / "screens"
 
-#: Alle Bildschirmdateien, die ein Suchfeld benutzen.
-MIT_SUCHE = sorted(
-    p for p in SCREENS.glob("*.py") if "Suchfeld" in p.read_text(encoding="utf-8")
-)
+#: Die Listen im Fenster. Dort gibt es das Suchfeld, seit es Qt gibt.
+LISTEN = sorted((WURZEL / "faktur" / "gui").glob("*.py"))
 
 
 # --------------------------------------------------------------- die Regel
@@ -101,41 +99,46 @@ def test_sichtbar_bemerkt_verschieden_lange_listen() -> None:
 
 
 def test_sichtbar_ist_die_einzige_stelle() -> None:
-    """Im ganzen Projekt wird nur hier gefiltert.
+    """Im ganzen Projekt wird nur ueber ``sichtbar`` gefiltert.
 
     Args:
         None
     """
-    for datei in MIT_SUCHE:
+    for datei in LISTEN:
         quelle = datei.read_text(encoding="utf-8")
         assert "filtern(" not in quelle, (
             f"{datei.name} benutzt noch filtern(). Damit laufen Zeilen und "
-            "Datensätze auseinander — genau das war der Fehler auf der "
+            "Datensaetze auseinander — genau das war der Fehler auf der "
             "Kundenliste. Gewollt ist sichtbar()."
         )
         assert "passt(" not in quelle, (
-            f"{datei.name} ruft passt() selbst. Das Filtern gehört in "
+            f"{datei.name} ruft passt() selbst. Das Filtern gehoert nach "
             "sichtbar(), sonst entstehen wieder eigene Wege."
         )
 
 
-def test_kein_bildschirm_bildet_ueber_eine_spalte_zurueck() -> None:
-    """Nach dem Filtern wird nicht über einen Spaltenwert zurückgebildet.
+def test_keine_seite_bildet_ueber_eine_spalte_zurueck() -> None:
+    """Nach dem Filtern wird nicht ueber einen Spaltenwert zurueckgebildet.
 
     So stand es in *Offene Forderungen* und in der Dokumentenliste: erst
     filtern, dann die passenden Zeilen anhand ihrer Kennung oder Nummer
-    wieder einsammeln. Zwei Schritte, von denen einer vergessen werden konnte.
+    wieder einsammeln. Zwei Schritte, von denen einer vergessen werden
+    konnte.
+
+    Im Fenster ist der Weg kuerzer: Das Modell haelt Datensatz und Zeile
+    zusammen, also gibt es gar keinen Ruecksprung. Wer hier doch einen baut,
+    hat den Fehler wieder eingebaut.
 
     Args:
         None
     """
-    for datei in MIT_SUCHE:
+    for datei in LISTEN:
         for nummer, zeile in enumerate(
             datei.read_text(encoding="utf-8").splitlines(), start=1
         ):
             if "nummern = {" in zeile:
                 pytest.fail(
-                    f"{datei.name}:{nummer} bildet über eine Spalte zurück: "
+                    f"{datei.name}:{nummer} bildet ueber eine Spalte zurueck: "
                     f"{zeile.strip()}"
                 )
 
@@ -143,36 +146,45 @@ def test_kein_bildschirm_bildet_ueber_eine_spalte_zurueck() -> None:
 # ---------------------------------------------- die Taste, die hineinfuehrt
 
 
-def _hat_suchaktion(datei: Path) -> bool:
-    """Sagt, ob der Bildschirm eine Aktion ``suchen`` hat.
-
-    Args:
-        datei: Die Bildschirmdatei.
-
-    Returns:
-        ``True``, wenn ``action_suchen`` definiert ist.
-    """
-    baum = ast.parse(datei.read_text(encoding="utf-8"))
-    return any(
-        isinstance(k, ast.FunctionDef) and k.name == "action_suchen"
-        for k in ast.walk(baum)
-    )
-
-
-def test_jedes_suchfeld_ist_auch_erreichbar() -> None:
-    """Wer ein Suchfeld zeigt, muss es auch bedienen können.
+def test_jede_liste_hat_ein_erreichbares_suchfeld() -> None:
+    """Wer eine Liste zeigt, muss sie auch durchsuchen können.
 
     Auf *Offene Forderungen* stand das Feld, und keine führte hinein. Die
-    Suche war damit vorhanden und trotzdem tot.
+    Suche war damit vorhanden und trotzdem tot — im Fenster darf sich das
+    nicht wiederholen.
 
     Args:
         None
     """
-    tot = [d.name for d in MIT_SUCHE if not _hat_suchaktion(d)]
+    pytest.importorskip("PySide6")
+    os.environ.setdefault("QT_QPA_PLATFORM", "minimal")
+
+    from faktur import db
+    from faktur.gui.fenster import Fenster
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    fenster = Fenster(db.verbinden(Path(tempfile.mkdtemp()) / "suche.db"))
+    fenster.zeige()
+    app.processEvents()
+
+    tot = []
+    for schluessel in fenster.reihenfolge:
+        seite = fenster.seiten[schluessel]
+        feld = getattr(seite, "suchfeld", None)
+        if feld is None or not feld.isVisible():
+            continue
+        fenster.gehe(schluessel)
+        app.processEvents()
+        fenster._suchen()
+        app.processEvents()
+        if not feld.hasFocus():
+            tot.append(schluessel)
+
+    fenster.fenster.close()
 
     assert tot == [], (
-        f"Diese Bildschirme zeigen ein Suchfeld, haben aber keine Taste, "
-        f"die hineinführt: {tot}"
+        f"Diese Bereiche zeigen ein Suchfeld, aber Cmd+F führt nicht hinein: {tot}"
     )
 
 
@@ -182,44 +194,49 @@ def test_und_die_taste_ist_auch_gebunden() -> None:
     Args:
         None
     """
-    ohne: list[str] = []
+    app_quelle = (WURZEL / "faktur" / "gui" / "fenster.py").read_text(encoding="utf-8")
 
-    for datei in MIT_SUCHE:
-        quelle = datei.read_text(encoding="utf-8")
-        if not _hat_suchaktion(datei):
-            continue
-        if '"suche", "suchen"' not in quelle:
-            ohne.append(datei.name)
-
-    assert ohne == [], f"Ohne Bindung auf ``suche``: {ohne}"
+    assert 'suche.setShortcut("Ctrl+F")' in app_quelle, (
+        "Die Aktion *Suchen* hat kein Kuerzel mehr."
+    )
+    assert "suche.triggered.connect(self._suchen)" in app_quelle, (
+        "Die Aktion *Suchen* ist nicht mehr verdrahtet."
+    )
 
 
 # ------------------------------------------------------ das gestrichene Logo
 
 
 def test_es_gibt_keinen_absturz_beim_logo_mehr() -> None:
-    """Der Menüpunkt *Logo* ist weg, weil er das Programm abstürzen ließ.
+    """In der Oberflaeche wird nie selbst kopiert.
 
-    Er suchte die Quelldatei an ``daten/logo.png`` und kopierte sie dann nach
-    ``daten/logo.png``. Quelle und Ziel waren dieselbe Datei, und
-    ``shutil.copyfile`` bricht das ab. Bei jedem Benutzer mit einem Logo,
-    bei jedem Klick.
+    Der alte Menüpunkt suchte die Quelldatei an ``daten/logo.png`` und
+    kopierte sie dann nach ``daten/logo.png``. Quelle und Ziel waren
+    dieselbe Datei, und ``shutil.copyfile`` bricht das ab. Bei jedem
+    Benutzer mit einem Logo, bei jedem Klick.
+
+    Kopieren darf nur :mod:`faktur.einstellungen`, und das nennt sein Ziel
+    ausdruecklich — siehe den naechsten Test.
 
     Args:
         None
     """
-    quelle = (SCREENS / "stammdaten.py").read_text(encoding="utf-8")
+    quelle = (WURZEL / "faktur" / "gui" / "stammdaten.py").read_text(encoding="utf-8")
 
-    assert "logo_waehlen" not in quelle, "Die abstürzende Methode ist noch da."
-    assert '"logo"' not in quelle, "Der Menüpunkt ist noch da."
-    assert "logo_uebernehmen" not in quelle, (
-        "Es wird noch eine Logodatei kopiert — ohne Zielordner ist das der "
-        "Weg, auf dem die Nutzerdaten kapttgehen."
+    assert "shutil" not in quelle, (
+        "In der Oberflaeche wird nicht kopiert. Das macht "
+        "faktur.einstellungen, und das nennt sein Ziel ausdruecklich."
     )
+    assert "logo_waehlen" not in quelle, "Die abstürzende Methode ist noch da."
 
 
 def test_und_die_logo_datei_wird_gar_nicht_mehr_kopiert() -> None:
-    """Außer den Tests kopiert niemand eine Logodatei.
+    """Außer den Tests kopiert niemand eine Logodatei ohne Ziel.
+
+    ``logo_uebernehmen`` nimmt ohne Angabe den echten Datenordner des
+    Benutzers. Das hat zweimal die echten Daten überschrieben, weil ein
+    Test genau das aufrief. Deshalb muss jeder Aufrufer das Ziel
+    ausdrücklich nennen — auch das Programm selbst.
 
     Args:
         None
@@ -231,7 +248,8 @@ def test_und_die_logo_datei_wird_gar_nicht_mehr_kopiert() -> None:
             continue
         if datei.name == "einstellungen.py":
             continue
-        aufrufer.append(datei.name)
+        if "ziel_ordner=" not in quelle:
+            aufrufer.append(datei.name)
 
     assert aufrufer == [], (
         f"Diese Dateien rufen logo_uebernehmen() ohne Zielordner auf: {aufrufer}. "
