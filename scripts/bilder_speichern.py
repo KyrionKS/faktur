@@ -59,13 +59,24 @@ def _datenbank(ordner: Path) -> object:
     dateien.kunde_speichern(verbindung, {"firma": "Zeta Tonwerk", "ort": "Berlin"})
     dateien.kunde_speichern(verbindung, {"firma": "Alpha Klangstudio", "ort": "Köln"})
 
-    # Zwei Belege: ein offener und ein bezahlter. Sonst steht in der
-    # Dokumentenliste nur eine graue Flaeche, und man sieht nicht, ob die
-    # Spalten und der Status stimmen.
+    # **Drei Projekte in drei Zustaenden.** Sonst steht in der
+    # Projektliste eine graue Flaeche, und man sieht nicht, ob die Spalten
+    # und der Stand stimmen — und nicht, dass ein Projekt ein Angebot *und*
+    # eine Rechnung sein kann.
+    #
+    # Angebot und Rechnung tragen dabei dieselbe Nummer: Das ist der ganze
+    # Sinn der Projektnummer, und es ist der Fall, den man sonst nie zu
+    # Gesicht bekommt.
     leistung = dateien.leistung_speichern(
         verbindung,
         {"bezeichnung": "Aufnahme Ton", "einheit": "Tag", "preis": "850"},
     )
+    mix = dateien.leistung_speichern(
+        verbindung,
+        {"bezeichnung": "Mischung und Master", "einheit": "Tag", "preis": "1200"},
+    )
+
+    # 0199 bei Soundcheck: angeboten und abgerechnet, und bezahlt.
     _beleg(
         verbindung,
         art="angebot",
@@ -78,16 +89,40 @@ def _datenbank(ordner: Path) -> object:
     rechnung = _beleg(
         verbindung,
         art="rechnung",
-        nummer="0231",
+        nummer="0199",
         kunde=1,
         datum="2026-10-12",
-        faellig="2026-09-01",
+        faellig="2026-11-11",
         leistung=leistung,
     )
     verbindung.execute(
         "UPDATE dokumente SET bezahlt_am = ? WHERE id = ?",
-        ("2026-09-20", rechnung),
+        ("2026-10-20", rechnung),
     )
+
+    # 0200 bei Zeta: nur angeboten, und das Angebot ist abgelaufen.
+    _beleg(
+        verbindung,
+        art="angebot",
+        nummer="0200",
+        kunde=2,
+        datum="2026-09-01",
+        gueltig_bis="2026-10-01",
+        leistung=mix,
+    )
+
+    # 0201 bei Alpha: abgerechnet, aber nicht bezahlt, und die Frist ist
+    # lange vorbei. Das ist der Fall, den man zuerst sehen will.
+    _beleg(
+        verbindung,
+        art="rechnung",
+        nummer="0201",
+        kunde=3,
+        datum="2026-08-20",
+        faellig="2026-09-19",
+        leistung=mix,
+    )
+
     verbindung.commit()  # noqa: E501
     return verbindung
 
@@ -104,6 +139,12 @@ def _beleg(
 ) -> int:
     """Legt einen Beleg mit einer Position an.
 
+    **Preis und Bezeichnung kommen aus der Leistung.** Vorher stand hier
+    fest ``850``, egal welche Leistung übergeben wurde — und damit stand
+    in *jedem* Bild 1.700,00 €, auch da, wo eine ganz andere Leistung
+    gemeint war. Ein Bild, das immer denselben Betrag zeigt, sagt nichts
+    über das Programm.
+
     Args:
         verbindung: Die Datenbankverbindung.
         art: Angebot oder Rechnung.
@@ -117,7 +158,10 @@ def _beleg(
     Returns:
         Die Nummer des neuen Belegs.
     """
-    from faktur import dateien
+    from faktur import betraege, dateien
+
+    eintrag = dateien.leistung_holen(verbindung, leistung)
+    assert eintrag is not None, f"Leistung {leistung} gibt es nicht"
 
     return dateien.dokument_speichern(
         verbindung,
@@ -132,10 +176,10 @@ def _beleg(
         [
             {
                 "leistung_id": leistung,
-                "bezeichnung": "Aufnahme Ton",
+                "bezeichnung": str(eintrag["bezeichnung"]),
                 "menge": 2,
-                "einheit": "Tag",
-                "preis": 850,
+                "einheit": str(eintrag["einheit"]),
+                "preis": betraege.zahl(eintrag["preis"]),
             }
         ],
     )

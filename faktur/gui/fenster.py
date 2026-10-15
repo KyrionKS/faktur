@@ -26,11 +26,11 @@ from faktur.gui.listen import (
     LeistungenSeite,
     OffeneSeite,
 )
+from faktur.gui.projekte import ProjekteSeite
 from faktur.gui.qt import (
     QAction,
     QActionGroup,
     QApplication,
-    QLabel,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
@@ -88,7 +88,12 @@ class Fenster:
         self.fenster = QMainWindow()
         self.fenster.setObjectName("hauptfenster")
         self.fenster.setWindowTitle("Faktur")
-        self.fenster.resize(1080, 700)
+        # Breiter als vorher: die Projektseite stellt zwei Tabellen
+        # nebeneinander, und bei 1080 bekam die linke so wenig, dass der
+        # Kunde auf *Soundc…* zusammenschob. Wer das Fenster schon
+        # gespeichert hat, behält seine Größe — das hier gilt nur fuer
+        # neue Installationen.
+        self.fenster.resize(1240, 700)
 
         self.einstellungen = QSettings("New Air Media Group", "Faktur")
 
@@ -125,7 +130,7 @@ class Fenster:
 
         self.seiten: dict[str, Seite] = {
             "uebersicht": UebersichtSeite(verbindung),
-            "projekte": ProjekteSeite(verbindung),
+            "projekte": self._projektseite(verbindung),
             "dokumente": self._dokumentseite(verbindung),
             "offen": OffeneSeite(verbindung),
             "kunden": KundenSeite(verbindung),
@@ -192,6 +197,23 @@ class Fenster:
             Die Dokumentenliste.
         """
         seite = DokumenteSeite(verbindung)
+        seite.geoeffnet = self._dokument_geoeffnet
+        return seite
+
+    def _projektseite(self, verbindung: sqlite3.Connection) -> ProjekteSeite:
+        """Baut die Projektseite und haengt sie an das Fenster.
+
+        Wie bei der Dokumentenliste: Die Seite weiss nichts vom Fenster,
+        das Fenster nichts von der Seite. Der Weg vom Doppelklick zum
+        Fenster wird hier einmal gebuehrt.
+
+        Args:
+            verbindung: Die Datenbankverbindung.
+
+        Returns:
+            Die Projektseite.
+        """
+        seite = ProjekteSeite(verbindung)
         seite.geoeffnet = self._dokument_geoeffnet
         return seite
 
@@ -579,19 +601,3 @@ class Fenster:
 
 
 __all__ = ["BEREICHE", "Fenster"]
-
-
-class ProjekteSeite(Seite):
-    """Eine Zeile je Projektnummer. Kommt im naechsten Schritt."""
-
-    def __init__(self, db: sqlite3.Connection) -> None:
-        """Baut die Seite auf.
-
-        Args:
-            db: Die Datenbankverbindung.
-        """
-        super().__init__(db, "Projekte")
-        self.ohne_suche()
-        hinweis = QLabel("Projekte kommen als Nächstes.")
-        hinweis.setObjectName("zweit")
-        self._koerper.addWidget(hinweis, 1)

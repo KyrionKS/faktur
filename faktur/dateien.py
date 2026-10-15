@@ -9,6 +9,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Sequence
 
+from faktur import betraege
 from faktur.db import nummer_aus
 
 #: Die Spalten eines Kunden, in der Reihenfolge des Formulars.
@@ -594,3 +595,179 @@ def kundenzahl(db: sqlite3.Connection, kunde_id: int) -> int:
         "SELECT COUNT(*) FROM dokumente WHERE kunde_id = ?", (kunde_id,)
     ).fetchone()
     return int(zeile[0]) if zeile else 0
+
+
+# ------------------------------------------------------------------ Projekte
+
+
+def projekte(db: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Fasst die Dokumente zu Projekten zusammen.
+
+    **Ein Projekt ist ein Kunde und eine Nummer.** Angebot 0199 und
+    Rechnung 0199 sind ein Vorgang, nicht zwei. Die Projektnummer wird
+    deshalb nicht mehr geprueft und nicht mehr zur Eindeutigkeit
+    herangezogen — sie ist ein Name, den der Benutzer gibt.
+
+    Aus den Dokumenten werden drei Zahlen, und die meinen nicht alle
+    dasselbe:
+
+    - ``summe`` ist das, was **berechnet** wurde. Gibt es keine Rechnung,
+      steht dort das Angebot — denn das Angebot ist die Absicht, und die
+      Rechnung die Tatsache.
+    - ``offen`` ist der Betrag, auf den noch Geld fehlt. Nur Rechnungen
+      zählen hinein; ein Angebot schuldet niemandem etwas.
+    - ``angebote`` und ``rechnungen`` zaehlen, damit man sieht, ob ein
+      Projekt schon abgerechnet ist oder noch nur angeboten wurde.
+
+    Args:
+        db: Die Datenbankverbindung.
+
+    Returns:
+        Die Projekte, die juengsten zuerst.
+    """
+    return list(
+        db.execute(
+            """
+            SELECT
+                d.kunde_id,
+                COALESCE(k.firma, '(kein Kunde)') AS firma,
+                d.nummer,
+                MIN(d.datum) AS datum,
+                SUM(CASE WHEN d.art = 'angebot' THEN 1 ELSE 0 END) AS angebote,
+                SUM(CASE WHEN d.art = 'rechnung' THEN 1 ELSE 0 END) AS rechnungen,
+                COALESCE(
+                    SUM(
+                        CASE WHEN d.art = 'rechnung' THEN 1 ELSE 0 END *
+                        (SELECT COALESCE(SUM(p.menge * p.preis), 0)
+                         FROM positionen AS p WHERE p.dokument_id = d.id)
+                    ),
+                    0
+                ) AS rechnung_summe,
+                COALESCE(
+                    SUM(
+                        CASE WHEN d.art = 'angebot' THEN 1 ELSE 0 END *
+                        (SELECT COALESCE(SUM(p.menge * p.preis), 0)
+                         FROM positionen AS p WHERE p.dokument_id = d.id)
+                    ),
+                    0
+                ) AS angebot_summe,
+                COALESCE(
+                    SUM(
+                        CASE WHEN d.art = 'rechnung' AND d.bezahlt_am = ''
+                             THEN 1 ELSE 0 END *
+                        (SELECT COALESCE(SUM(p.menge * p.preis), 0)
+                         FROM positionen AS p WHERE p.dokument_id = d.id)
+                    ),
+                    0
+                ) AS offen,
+                MAX(CASE WHEN d.art = 'rechnung' THEN d.bezahlt_am ELSE '' END)
+                    AS bezahlt_am,
+                MIN(CASE WHEN d.art = 'rechnung' AND d.faellig != ''
+                         THEN d.faellig ELSE '' END) AS faellig,
+                MIN(CASE WHEN d.art = 'angebot' THEN d.gueltig_bis ELSE '' END)
+                    AS gueltig_bis
+            FROM dokumente AS d
+            LEFT JOIN kunden AS k ON k.id = d.kunde_id
+            GROUP BY d.kunde_id, d.nummer
+            ORDER BY MIN(d.datum) DESC, MIN(d.id) DESC
+            """
+        )
+    )
+
+
+def projektsumme(projekt: sqlite3.Row) -> float:
+    """Sagt, was ein Projekt bisher wert ist.
+
+    **Die Rechnung schlaegt das Angebot.** Sonst stuende nach dem
+    Abrechnen plötzlich eine andere Zahl in der Liste als vorher, ohne
+    dass sich am Projekt etwas geaendert haette — nur weil ein zweites
+    Dokument dazugekommen ist.
+
+    Args:
+        projekt: Eine Zeile aus :func:`projekte`.
+
+    Returns:
+        Die Rechnungssumme, oder — wo noch keine ist — die des Angebots.
+    """
+    rechnungen = float(projekt["rechnungen"] or 0)
+    if rechnungen:
+        return float(projekt["rechnung_summe"] or 0)
+    return float(projekt["angebot_summe"] or 0)
+
+
+def projektstand(projekt: sqlite3.Row) -> str:
+    """Sagt, wo ein Projekt steht.
+
+    Args:
+        projekt: Eine Zeile aus :func:`projekte`.
+
+    Returns:
+        Ein Wort für die Liste.
+    """
+    if float(projekt["rechnungen"] or 0):
+        if float(projekt["offen"] or 0) <= 0:
+            return "bezahlt"
+        if _ist_ueberfaellig(str(projekt["faellig"] or "")):
+            return "überfällig"
+        return "offen"
+    if _ist_ueberfaellig(str(projekt["gueltig_bis"] or "")):
+        return "abgelaufen"
+    return "angeboten"
+
+
+def _ist_ueberfaellig(frist: str) -> bool:
+    """Sagt, ob eine Frist abgelaufen ist.
+
+    **Datumswörter lassen sich nicht als Text vergleichen.** Gespeichert
+    wird als ``TT.MM.JJJJ``, und in dieser Schreibweise stimmt sich
+    Zeichen für Zeichen nur innerhalb desselben Jahres: „05.11.2026" ist
+    Text *kleiner* als „15.10.2026", weil 0 kleiner ist als 1 — der
+    5. November liegt aber drei Wochen in der Zukunft. Genau so stand eine
+    fristlose Rechnung als *überfällig* in der Liste.
+
+    Darum wird das Datum erst gelesen und dann verglichen, genau wie
+    :func:`faktur.offen.ist_faellig` es tut. Was nicht lesbar ist, gilt
+    nicht als abgelaufen.
+
+    Args:
+        frist: Das Datum aus der Datenbank.
+
+    Returns:
+        ``True``, wenn der Tag vor heute liegt.
+    """
+    if not frist:
+        return False
+    gefunden = betraege.lies_datum(frist)
+    heute = betraege.lies_datum(betraege.heute())
+    if gefunden is None or heute is None:
+        return False
+    return gefunden < heute
+
+
+def projekt_belege(db: sqlite3.Connection, projekt: sqlite3.Row) -> list[sqlite3.Row]:
+    """Gibt die Belege eines Projekts zurück, älteste zuerst.
+
+    Args:
+        db: Die Datenbankverbindung.
+        projekt: Eine Zeile aus :func:`projekte`.
+
+    Returns:
+        Die Dokumente dieses Projekts. Das Angebot kommt vor der
+        Rechnung, weil es das zeitlich frühere ist.
+    """
+    kunde_id = projekt["kunde_id"]
+    if kunde_id is None:
+        # Ohne Kunde gibt es nichts, wonach man suchen koennte.
+        return []
+    return list(
+        db.execute(
+            """
+            SELECT d.*, COALESCE(k.firma, '(kein Kunde)') AS firma
+            FROM dokumente AS d
+            LEFT JOIN kunden AS k ON k.id = d.kunde_id
+            WHERE d.kunde_id = ? AND d.nummer = ?
+            ORDER BY d.datum, d.id
+            """,
+            (kunde_id, projekt["nummer"]),
+        )
+    )

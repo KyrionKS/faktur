@@ -304,7 +304,7 @@ def dokument_zellen(db: sqlite3.Connection) -> Zellen:
         """
         return [
             str(dokument["nummer"]),
-            _kurz_datum(dokument["datum"]),
+            kurz_datum(dokument["datum"]),
             str(dokument["firma"]),
             _art(dokument["art"]),
             betraege.euro(dateien.summe_von(db, dokument["id"])),
@@ -346,17 +346,32 @@ def _status(dokument: sqlite3.Row) -> str:
     return "offen"
 
 
-def _kurz_datum(wert: str) -> str:
+def kurz_datum(wert: str) -> str:
     """Kürzt ein Datum auf Tag und Monat.
+
+    **Gespeichert wird als ``TT.MM.JJJJ``**, nicht als ``JJJJ-MM-TT`` —
+    :func:`faktur.betraege.datum` normalisiert darauf. Der Schnitt hier
+    war auf die andere Reihenfolge gemacht, und so stand in der
+    Dokumentenliste ``26..2..1`` statt ``06.10.``.
+
+    Args:
+        wert: Das Datum aus der Datenbank, oder ``""``.
+
+    **Erst normalisieren, dann schneiden.** Ein reiner Längen-Test
+    reicht nicht: Jeder zehn Zeichen lange Unsinn — *kein Datum* ist
+    genau so lang — kam als ``ke.n .`` in der Liste heraus. Wer hier
+    selbst prüft, prüft die Form noch einmal schlechter als der Parser,
+    den es schon gibt.
 
     Args:
         wert: Das Datum aus der Datenbank, oder ``""``.
 
     Returns:
-        Das kurze Datum, oder ``""``.
+        Das kurze Datum, oder ``""``, wenn keins dasteht.
     """
-    if len(wert) == 10:
-        return f"{wert[8:10]}.{wert[5:7]}.{wert[2:4]}"
+    normiert = betraege.datum(wert)
+    if len(normiert) == 10:
+        return f"{normiert[0:2]}.{normiert[3:5]}."
     return ""
 
 
@@ -453,7 +468,7 @@ class OffeneSeite(ListenSeite):
         return [
             str(dokument["nummer"]),
             str(dokument["firma"]),
-            _kurz_datum(dokument["faellig"]),
+            kurz_datum(dokument["faellig"]),
             betraege.euro(dateien.summe_von(self.db, dokument["id"])),
             str(tage) if tage > 0 else "",
         ]
@@ -484,6 +499,8 @@ __all__ = [
     "KundenSeite",
     "LeistungenSeite",
     "OffeneSeite",
+    "dokument_zellen",
     "kunden_zellen",
+    "kurz_datum",
     "leistung_zellen",
 ]

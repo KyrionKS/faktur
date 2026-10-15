@@ -48,9 +48,12 @@ def ist_bezahlt(dokument: sqlite3.Row) -> bool:
 def ist_faellig(dokument: sqlite3.Row, heute: str) -> bool:
     """Sagt, ob eine offene Rechnung überfaellig ist.
 
-    Das Datum wird als Text verglichen. Beide liegen im Format
-    ``JJJJ-MM-TT`` in der Datenbank, und das stimmt sich schneller und ohne
-    Umweg über ein Objekt.
+    **Das Datum wird erst gelesen, dann verglichen.** In der Datenbank
+    steht es als ``TT.MM.JJJJ``, und als Text verglichen stimmt sich das
+    nur innerhalb desselben Jahres: „05.11.2026" ist kleiner als
+    „15.10.2026", weil 0 kleiner ist als 1 — obwohl der 5. November
+    später liegt. Deshalb wird beides zu einem Objekt gemacht und dann
+    verglichen.
 
     Args:
         dokument: Das Dokument mit ``faellig`` und ``bezahlt_am``.

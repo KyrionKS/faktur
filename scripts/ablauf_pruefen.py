@@ -224,10 +224,22 @@ def durchlauf(fenster: Fenster, app: QApplication, protokoll: Protokoll) -> None
             "Offene Forderungen", "ist leer, obwohl eine Rechnung offen ist"
         )
 
+    _projekte_pruefen(fenster, app, protokoll)
+
     # Noch nicht gebaut. Das ist kein Fehler, sondern der Stand.
+    #
+    # **Nach dem Listenmodell fragen, nicht nach einer Tabelle.** Vorher
+    # stand hier ``hasattr(seite, "modell")``, und die Projektseite hat aus
+    # gutem Grund zwei Tabellen und damit kein einzelnes ``modell`` — sie
+    # wurde dadurch fuer nicht gebaut gehalten und blieb auf der Liste
+    # *fehlt*, obwohl sie fertig war.
+    #
+    # Nicht nach *irgendeiner* Tabelle fragen: Die Stammdatenseite hat in
+    # den Brieftexten inzwischen selbst eine, und galt dadurch als fertig
+    # — wodurch ihre Pruefung ersatzlos wegfiel.
     for _schluessel, titel, _kuerzel in BEREICHE:
         seite = fenster.seiten[_schluessel]
-        if hasattr(seite, "modell"):
+        if _hat_liste(seite):
             continue
         if _schluessel == "stammdaten":
             _stammdaten_pruefen(fenster, seite, protokoll)
@@ -236,6 +248,80 @@ def durchlauf(fenster: Fenster, app: QApplication, protokoll: Protokoll) -> None
     _formular_pruefen(fenster, app, protokoll)
     _dokument_pruefen(fenster, app, protokoll)
     protokoll.noch_nicht("Export und die Zahlen auf der Übersicht")
+
+
+def _hat_liste(seite: object) -> bool:
+    """Sagt, ob die Seite eine Liste von Datensaetzen zeigt.
+
+    **Nach dem Modell, nicht nach dem Widget.** Jede Listenpage traegt ein
+    :class:`~faktur.gui.tabelle.ZeilenModell`; die Stammdatenseite
+    dagegen eine einfache Tabelle fuer die Platzhalter. Wer nur nach
+    *einer* Tabelle fragt, haelt die Stammdatenseite fuer eine
+    Listenpage — und prueft sie damit nicht mehr.
+
+    Args:
+        seite: Die Seite aus dem Fenster.
+
+    Returns:
+        ``True``, wenn die Seite eine Liste zeigt.
+    """
+    from faktur.gui.tabelle import ZeilenModell
+    from PySide6.QtWidgets import QTableView
+
+    return any(
+        isinstance(ansicht.model(), ZeilenModell)
+        for ansicht in seite.findChildren(QTableView)
+    )
+
+
+def _projekte_pruefen(fenster: Fenster, app: object, protokoll: Protokoll) -> None:
+    """Prueft, dass ein Projekt seine Belege rechts zeigt.
+
+    Das ist der ganze Sinn der Seite: Angebot und Rechnung eines Kunden
+    als *ein* Vorgang. Steht links das Projekt und stehen nicht seine
+    Belege rechts, ist die Seite nicht gebaut, gleichgueltig wie viele
+    Zeilen sie hat.
+
+    Args:
+        fenster: Das Fenster.
+        app: Die Qt-Anwendung.
+        protokoll: Wohin das Ergebnis kommt.
+
+    Returns:
+        Nichts.
+    """
+    fenster.gehe("projekte")
+    app.processEvents()
+    seite = fenster.seite()
+
+    if not seite.projekte.model().rowCount():
+        protokoll.schlecht("Projektliste", "ist leer, obwohl ein Beleg da ist")
+        return
+    protokoll.ok(f"Projektliste zeigt {seite.projekte.model().rowCount()} Projekte")
+
+    seite.projekte.setCurrentIndex(seite.projekte.model().index(0, 0))
+    app.processEvents()
+
+    if seite.belege.model().rowCount():
+        protokoll.ok(
+            f"und daneben {seite.belege.model().rowCount()} Belege desselben Projekts"
+        )
+    else:
+        protokoll.schlecht("Belegliste", "zeigt nichts zum markierten Projekt")
+
+    # Ohne Markierung muessen wieder *alle* Belege stehen, nicht die des
+    # markierten Projekts. Sonst waere die rechte Liste eine Falle: man
+    # glaubt, es gaebe nur diese Belege.
+    alle = seite.belege.model().rowCount()
+    seite.projekte.clearSelection()
+    app.processEvents()
+    if seite.belege.model().rowCount() == alle:
+        protokoll.ok(f"ohne Markierung stehen wieder alle {alle} Belege da")
+    else:
+        protokoll.schlecht(
+            "Belegliste",
+            f"zeigt nach dem Abwaehlen {seite.belege.model().rowCount()} statt {alle}",
+        )
 
 
 def _dialoge_stumm() -> None:
@@ -851,6 +937,10 @@ def main() -> int:
     durchlauf(fenster, app, protokoll)
 
     fenster.fenster.close()
+
+    # **Erst schliessen, dann loeschen.** Sonst haengt SQLite beim
+    # Abbruch noch an der Datei, die es gerade nicht mehr gibt.
+    verbindung.close()
     shutil.rmtree(ordner, ignore_errors=True)
 
     print("Ablauf durch das Fenster")  # noqa: T201
