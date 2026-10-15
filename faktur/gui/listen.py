@@ -368,6 +368,7 @@ class DokumenteSeite(ListenSeite):
             db: Die Datenbankverbindung.
         """
         self.nur_rechnungen = False
+        self.geoeffnet = None
         super().__init__(
             db,
             "Dokumente",
@@ -377,6 +378,20 @@ class DokumenteSeite(ListenSeite):
             "Dokument",
             vergleiche={4: nach_zahl(4)},
         )
+        self.ansicht.doubleClicked.connect(self._doppelt)
+
+    def _doppelt(self, index: object) -> None:
+        """Meldet dem Fenster, dass ein Dokument geoeffnet werden soll.
+
+        Args:
+            index: Die Zeile, auf die geklickt wurde.
+
+        Returns:
+            Nichts.
+        """
+        if index is not None and index.isValid() and self.geoeffnet is not None:
+            self.ansicht.setCurrentIndex(index)
+            self.geoeffnet()
         self.ansicht.setSortingEnabled(True)
 
     def hole(self) -> list[sqlite3.Row]:

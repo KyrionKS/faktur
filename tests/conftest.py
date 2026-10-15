@@ -53,6 +53,10 @@ def keine_offenen_dialoge() -> Iterator[None]:
     from faktur.gui.qt import QMessageBox
 
     echtes_exec = QMessageBox.exec
+    echtes_orig = {
+        name: getattr(QMessageBox, name)
+        for name in ("warning", "critical", "information", "question")
+    }
 
     def still(selbst: object) -> int:
         """Bricht ab, wenn niemand aufpasst.
@@ -66,7 +70,46 @@ def keine_offenen_dialoge() -> Iterator[None]:
         return 0
 
     QMessageBox.exec = still  # type: ignore[method-assign]
+    # Die statischen Dialoge werden ohne Instanz gerufen, mit Fenster,
+    # Titel und Text — deshalb die Sternchen.
+    for name in ("warning", "critical", "information"):
+        setattr(QMessageBox, name, staticmethod(lambda *a, **k: 0))
+    QMessageBox.question = staticmethod(  # type: ignore[method-assign]
+        lambda *a, **k: QMessageBox.StandardButton.Cancel
+    )
+
     try:
         yield
     finally:
         QMessageBox.exec = echtes_exec  # type: ignore[method-assign]
+        for name in ("warning", "critical", "information", "question"):
+            setattr(QMessageBox, name, echtes_orig[name])
+
+
+@pytest.fixture(autouse=True)
+def fenster_zu() -> Iterator[None]:
+    """Schliesst nach jedem Test alle Fenster.
+
+    Ein Fenster, das offen bleibt, wird beim Abbau des Programms
+    zerstoert — zu einem Zeitpunkt, zu dem Python schon halb weg ist.
+    Qt kommt dann an Objekte, die es nicht mehr gibt, und beendet sich mit
+    einem Busfehler statt mit einer Fehlermeldung.
+
+    Gemessen, nicht vermutet: Sieben Tests in ``test_editor_fenster.py``
+    endeten mit Signal 139 oder 135, alle mit einem offenen Fenster.
+
+    Yields:
+        Nichts.
+    """
+    pytest.importorskip("PySide6")
+    from faktur.gui.qt import QApplication
+
+    yield
+
+    laufend = QApplication.instance()
+    if laufend is None:
+        return
+    for fenster in list(laufend.topLevelWidgets()):
+        fenster.close()
+        fenster.deleteLater()
+    laufend.processEvents()

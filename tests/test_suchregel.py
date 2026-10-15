@@ -101,20 +101,40 @@ def test_sichtbar_bemerkt_verschieden_lange_listen() -> None:
 def test_sichtbar_ist_die_einzige_stelle() -> None:
     """Im ganzen Projekt wird nur ueber ``sichtbar`` gefiltert.
 
+    **Kommentare zaehlen nicht.** Wer in einem Kommentar ``passt()`` erwaehnt,
+    um zu erklaeren, warum er es nicht benutzt, hat es nicht benutzt. Sonst
+    schlaegt der Waechter an der Erklaerung an statt am Aufruf.
+
     Args:
         None
     """
     for datei in LISTEN:
-        quelle = datei.read_text(encoding="utf-8")
-        assert "filtern(" not in quelle, (
-            f"{datei.name} benutzt noch filtern(). Damit laufen Zeilen und "
-            "Datensaetze auseinander — genau das war der Fehler auf der "
-            "Kundenliste. Gewollt ist sichtbar()."
-        )
-        assert "passt(" not in quelle, (
-            f"{datei.name} ruft passt() selbst. Das Filtern gehoert nach "
-            "sichtbar(), sonst entstehen wieder eigene Wege."
-        )
+        for nummer, zeile in enumerate(_code(datei), start=1):
+            assert "filtern(" not in zeile, (
+                f"{datei.name}:{nummer} benutzt noch filtern(). Damit laufen "
+                "Zeilen und Datensaetze auseinander — genau das war der "
+                "Fehler auf der Kundenliste. Gewollt ist sichtbar()."
+            )
+            assert "passt(" not in zeile, (
+                f"{datei.name}:{nummer} ruft passt() selbst. Das Filtern "
+                "gehoert nach sichtbar(), sonst entstehen wieder eigene Wege."
+            )
+
+
+def _code(datei: Path) -> list[str]:
+    """Gibt die Zeilen einer Datei ohne Kommentare zurück.
+
+    Args:
+        datei: Die Python-Datei.
+
+    Returns:
+        Die Zeilen, von denen keine ein Kommentar ist.
+    """
+    return [
+        zeile
+        for zeile in datei.read_text(encoding="utf-8").splitlines()
+        if not zeile.lstrip().startswith("#")
+    ]
 
 
 def test_keine_seite_bildet_ueber_eine_spalte_zurueck() -> None:

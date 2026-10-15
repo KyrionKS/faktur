@@ -229,8 +229,148 @@ def durchlauf(fenster: Fenster, app: QApplication, protokoll: Protokoll) -> None
         if not hasattr(fenster.seiten[_schluessel], "modell"):
             protokoll.noch_nicht(f"Bereich {titel} hat noch keinen Inhalt")
     _formular_pruefen(fenster, app, protokoll)
-    protokoll.noch_nicht("Dokumenteditor als eigenes Fenster")
+    _dokument_pruefen(fenster, app, protokoll)
     protokoll.noch_nicht("Einstellungen, Export und Übersicht")
+
+
+def _dialoge_stumm() -> None:
+    """Beantwortet jeden Dialog, ohne auf jemanden zu warten.
+
+    ``QMessageBox.warning()`` und seine Geschwister halten den Ablauf an,
+    bis ein Mensch klickt. Hier klickt niemand, also beantwortet diese
+    Funktion alles selbst — *Abbrechen*, die vorsichtigste Antwort, die es
+    gibt. Sie ist **nur** fuer diesen Durchlauf da; im Programm steht
+    keine davon.
+
+    Returns:
+        Nichts.
+    """
+    from faktur.gui.qt import QMessageBox
+
+    for name in ("exec", "warning", "critical", "information"):
+        setattr(QMessageBox, name, staticmethod(lambda *a, **k: 0))
+    QMessageBox.question = staticmethod(  # noqa: E731
+        lambda *a, **k: QMessageBox.StandardButton.Cancel
+    )
+
+
+def _dokument_pruefen(
+    fenster: Fenster, app: QApplication, protokoll: Protokoll
+) -> None:
+    """Baut ein Angebot, speichert es und rechnet es ab.
+
+    **Mit eigener Datenbank.** Sonst zaehlt hier die Rechnung aus dem
+    Kundenteil mit, und jede Zaehlung haengt daran, was vorher passiert
+    ist. Das war nicht eine theoretische Sorge: die erste Fassung kam
+    nicht durch, weil die Durchlaufdatenbank schon Belege hatte.
+
+    Args:
+        fenster: Das Fenster.
+        app: Die Anwendung.
+        protokoll: Wohin die Ergebnisse kommen.
+
+    Returns:
+        Nichts.
+    """
+    import shutil
+    import tempfile
+
+    from faktur import dateien
+    from faktur import db as db_modul
+    from faktur.gui.editor import EditorFenster
+
+    frisch = Path(tempfile.mkdtemp(prefix="faktur_dokument_"))
+    verbindung = db_modul.verbinden(frisch / "dokument.db")
+    dateien.kunde_speichern(verbindung, {"firma": "Soundcheck GmbH"})
+    dateien.kunde_speichern(verbindung, {"firma": "Zeta Tonwerk"})
+    leistungen = dateien.leistungen(verbindung)
+
+    try:
+        editor = EditorFenster(verbindung)
+        if editor.art.currentData() != "angebot":
+            protokoll.schlecht("Editor", "ein neues Dokument ist kein Angebot")
+            return
+        protokoll.ok("Ein neues Fenster beginnt als Angebot")
+
+        editor.positionen.aus_leistung(leistungen[0])
+        editor.positionen.aus_leistung(leistungen[1])
+        erwartet = float(leistungen[0]["preis"]) + float(leistungen[1]["preis"])
+        if abs(editor.positionen.summe() - erwartet) > 0.005:
+            protokoll.schlecht("Summe", f"{editor.positionen.summe()} statt {erwartet}")
+        else:
+            protokoll.ok("Summe unter der Tabelle rechnet mit")
+
+        vorher = editor.positionen.summe()
+        editor.positionen.verschiebe(1, -1)
+        if editor.positionen.summe() == vorher:
+            protokoll.ok("Umstellen aendert die Summe nicht")
+        else:
+            protokoll.schlecht("Umstellen", "hat die Summe veraendert")
+
+        anzahl = len(dateien.dokumente(verbindung))
+        if (
+            editor.speichern(mit_pdf=False) is False
+            and len(dateien.dokumente(verbindung)) == anzahl
+        ):
+            protokoll.ok("ohne Kunde wird nicht gespeichert")
+        else:
+            protokoll.schlecht("Editor", "hat ohne Kunde gespeichert")
+            return
+
+        if not _waehle_kunde(editor, "Soundcheck GmbH"):
+            protokoll.schlecht("Editor", "Soundcheck GmbH steht nicht in der Auswahl")
+            return
+        if editor.speichern(mit_pdf=False):
+            protokoll.ok("Angebot speichern")
+        else:
+            protokoll.schlecht("Editor", "das Angebot liess sich nicht speichern")
+            return
+
+        angebote = [d for d in dateien.dokumente(verbindung) if d["art"] == "angebot"]
+        if len(angebote) != 1:
+            protokoll.schlecht("Angebot", f"{len(angebote)} Angebote, 1 erwartet")
+            return
+        angebot = angebote[0]
+
+        if (
+            len(dateien.positionen(verbindung, angebot["id"]))
+            == editor.positionen.rowCount()
+        ):
+            protokoll.ok("so viele Positionen in der Datenbank wie im Bild")
+        else:
+            protokoll.schlecht(
+                "Angebot",
+                f"{len(dateien.positionen(verbindung, angebot['id']))} in der "
+                f"Datenbank, {editor.positionen.rowCount()} im Bild",
+            )
+
+        rechnung = EditorFenster(verbindung, angebots_id=angebot["id"])
+        app.processEvents()
+
+        if rechnung.art.currentData() != "rechnung":
+            protokoll.schlecht("Abrechnen", "es wurde keine Rechnung daraus")
+            return
+        if rechnung.nummer.text() != str(angebot["nummer"]):
+            protokoll.schlecht(
+                "Abrechnen",
+                f"Nummer {rechnung.nummer.text()} statt {angebot['nummer']}",
+            )
+            return
+        if rechnung.positionen.rowCount() != 2:
+            protokoll.schlecht("Abrechnen", "die Positionen sind nicht mitgewandert")
+            return
+        protokoll.ok("Aus dem Angebot wird eine Rechnung mit derselben Nummer")
+
+        if rechnung.speichern(mit_pdf=False):
+            protokoll.ok("und die Rechnung liegt in der Datenbank")
+        else:
+            protokoll.schlecht("Abrechnen", "die Rechnung liess sich nicht speichern")
+
+        editor.close()
+        rechnung.close()
+    finally:
+        verbindung.close()
+        shutil.rmtree(frisch, ignore_errors=True)
 
 
 def _belege_anlegen(fenster: Fenster, kunde: int) -> None:
@@ -263,6 +403,28 @@ def _belege_anlegen(fenster: Fenster, kunde: int) -> None:
             }
         ],
     )
+
+
+def _waehle_kunde(editor: object, firma: str) -> bool:
+    """Waehlt einen Kunden im Dokumentfenster nach Namen.
+
+    **Nach Namen, nicht nach Nummer.** Die Kundenauswahl hat vorn einen
+    leeren Platz, ihre Nummern laufen also gegenueber der Datenbank um
+    eins. Wer sie vergleicht, waehlt den leeren Platz und speichert
+    nichts.
+
+    Args:
+        editor: Das Dokumentfenster.
+        firma: Der Name des Kunden.
+
+    Returns:
+        ``True``, wenn der Kunde gefunden wurde.
+    """
+    for nummer in range(editor.kunde.count()):
+        if editor.kunde.itemText(nummer) == firma:
+            editor.kunde.setCurrentIndex(nummer)
+            return True
+    return False
 
 
 def _waehle(seite: object, spalte: int, gesucht: str) -> object:
@@ -324,15 +486,12 @@ def _formular_pruefen(
         "notiz": "",
     }
     Formular.exec = lambda self: Formular.DialogCode.Accepted  # noqa: E731
+
+    # Hier wird jeder Frage zugestimmt, weil sonst nichts geloescht
+    # wuerde und der Durchlauf an dieser Stelle nichts pruefte.
     QMessageBox.question = staticmethod(  # noqa: E731
         lambda *a, **k: QMessageBox.StandardButton.Yes
     )
-
-    # ``exec()`` wartet auf einen Klick, und hier klickt niemand. Ohne das
-    # bliebe der Durchlauf an der Frage hängen, obwohl an *Löschen* gar
-    # keine Frage mehr kommt. Sie wird mit *Abbrechen* beantwortet — der
-    # vorsichtigsten Antwort, die es gibt.
-    QMessageBox.exec = lambda self: 0  # noqa: E731
 
     try:
         seite.aktionen.neu()
@@ -499,7 +658,7 @@ def _formular_pruefen(
 
             Args:
                 self: Das Blatt.
-                db: Die Datenbankverbindung.
+                db: Die Datenbankfenster.db.
                 titel: Der Titel.
                 felder: Die Felder.
                 daten: Die Werte des gewaehlten Kunden.
@@ -622,6 +781,8 @@ def main() -> int:
     fenster = Fenster(verbindung)
     fenster.zeige()
     app.processEvents()
+
+    _dialoge_stumm()
 
     protokoll = Protokoll()
     durchlauf(fenster, app, protokoll)

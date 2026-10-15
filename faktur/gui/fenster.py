@@ -87,6 +87,11 @@ class Fenster:
 
         self.einstellungen = QSettings("New Air Media Group", "Faktur")
 
+        #: Die offenen Dokumentfenster. Sie leben weiter, wenn man
+        #: sie schliesst; ohne Liste wuerden sie beim naechsten Fenster
+        #: eingesammelt und zerstoert.
+        self._angebote: list[object] = []
+
         self.leiste = QListWidget()
         self.leiste.setObjectName("leiste")
         self.leiste.setFixedWidth(212)
@@ -112,7 +117,7 @@ class Fenster:
         self.seiten: dict[str, Seite] = {
             "uebersicht": _kommt_noch(verbindung, "Übersicht"),
             "projekte": _kommt_noch(verbindung, "Projekte"),
-            "dokumente": DokumenteSeite(verbindung),
+            "dokumente": self._dokumentseite(verbindung),
             "offen": OffeneSeite(verbindung),
             "kunden": KundenSeite(verbindung),
             "leistungen": LeistungenSeite(verbindung),
@@ -154,6 +159,24 @@ class Fenster:
         self.fenster.show()
 
     # --------------------------------------------------------------- bereiche
+
+    def _dokumentseite(self, verbindung: sqlite3.Connection) -> DokumenteSeite:
+        """Baut die Dokumentenliste und haengt sie an das Fenster.
+
+        Der Doppelklick auf einen Beleg soll ihn oeffnen. Die Liste weiss
+        nichts vom Fenster und das Fenster nichts von der Liste — deshalb
+        wird der Weg hier einmal gebuehrt, statt in einer von beiden
+        festverdrahtet zu sein.
+
+        Args:
+            verbindung: Die Datenbankverbindung.
+
+        Returns:
+            Die Dokumentenliste.
+        """
+        seite = DokumenteSeite(verbindung)
+        seite.geoeffnet = self._dokument_geoeffnet
+        return seite
 
     def gehe(self, schluessel: str) -> None:
         """Springt in einen Bereich der Seitenleiste.
@@ -240,8 +263,9 @@ class Fenster:
         datei = leiste.addMenu("&Datei")
 
         self._taste(datei, "Neuer Kunde", "Ctrl+Shift+K", self._neu)
-        self._taste(datei, "Neues Angebot", "Ctrl+N")
-        self._taste(datei, "Aus Angebot abrechnen", "Ctrl+Shift+R")
+        self._taste(datei, "Dokument öffnen", "Ctrl+O", self._dokument_geoeffnet)
+        self._taste(datei, "Neues Angebot", "Ctrl+N", self._neues_angebot)
+        self._taste(datei, "Aus Angebot abrechnen", "Ctrl+Shift+R", self._abrechnen)
 
         datei.addSeparator()
 
@@ -397,6 +421,71 @@ class Fenster:
             self.melde("Diese Liste lässt sich hier nicht bearbeiten.")
             return None
         return getattr(aktionen, name, None)
+
+    def _neues_angebot(self) -> None:
+        """Öffnet ein leeres Fenster für ein Angebot.
+
+        Returns:
+            Nichts.
+        """
+        from faktur.gui.editor import EditorFenster
+
+        fenster = EditorFenster(self.db, eltern=self.fenster)
+        fenster.show()
+        self._angebote.append(fenster)
+
+    def _abrechnen(self) -> None:
+        """Öffnet ein Angebot zum Abrechnen.
+
+        Geht nur, wenn auf der Dokumentenliste gerade ein Angebot steht.
+        Ein Angebot ist die Grundlage einer Rechnung, und raten wäre hier
+        falsch.
+
+        Returns:
+            Nichts.
+        """
+        from faktur.gui.editor import EditorFenster
+
+        dokument = self._angebot_gewaehlt()
+        if dokument is None:
+            self.melde("Erst ein Angebot markieren, dann abrechnen.")
+            return
+
+        fenster = EditorFenster(
+            self.db, angebots_id=int(dokument["id"]), eltern=self.fenster
+        )
+        fenster.show()
+        self._angebote.append(fenster)
+
+    def _angebot_gewaehlt(self) -> object:
+        """Gibt das markierte Angebot zurück.
+
+        Returns:
+            Das Angebot, oder ``None``, wenn keines markiert ist.
+        """
+        self.gehe("dokumente")
+        dokument = self.seite().gewaehlt()
+        if dokument is None or dokument["art"] != "angebot":
+            return None
+        return dokument
+
+    def _dokument_geoeffnet(self) -> None:
+        """Öffnet das markierte Dokument zum Ändern.
+
+        Returns:
+            Nichts.
+        """
+        from faktur.gui.editor import EditorFenster
+
+        dokument = self.seite().gewaehlt()
+        if dokument is None:
+            self.melde("Erst ein Dokument markieren.")
+            return
+        fenster = EditorFenster(
+            self.db, dokument_id=int(dokument["id"]), eltern=self.fenster
+        )
+        fenster.show()
+        self._angebote.append(fenster)
 
     def _neu(self) -> None:
         """Legt einen neuen Eintrag an.

@@ -158,6 +158,42 @@ def speichere(fenster: Fenster, schluessel: str) -> Path:
     return ziel
 
 
+def _editor(verbindung: object) -> Path:
+    """Zeichnet das Dokumentfenster mit zwei Positionen.
+
+    Das ist das Fenster, in dem die meiste Zeit verbracht wird. Wer es
+    nie gesehen hat, glaubt nicht, dass es das gibt.
+
+    Args:
+        verbindung: Die Datenbankverbindung.
+
+    Returns:
+        Der Pfad zum Bild.
+    """
+    from faktur import dateien
+    from faktur.gui.editor import EditorFenster
+
+    leistungen = dateien.leistungen(verbindung)
+    editor = EditorFenster(verbindung)
+    for nummer in range(editor.kunde.count()):
+        if editor.kunde.itemText(nummer):
+            editor.kunde.setCurrentIndex(nummer)
+            break
+    editor.positionen.aus_leistung(leistungen[0])
+    editor.positionen.aus_leistung(leistungen[1])
+    editor.positionen.verschiebe(1, -1)
+    editor.notiz.setText("Aufnahme fuer den neuen Kurzfilm")
+
+    editor.show()
+    app = QApplication.instance()
+    if app is not None:
+        app.processEvents()
+    ziel = ZIEL / "08_editor.png"
+    editor.grab().save(str(ziel))
+    editor.close()
+    return ziel
+
+
 def main() -> int:
     """Zeichnet alle Bereiche und sagt, wo die Bilder liegen.
 
@@ -183,6 +219,7 @@ def main() -> int:
 
     fenster.fenster.close()
     geschrieben.append(_formular(verbindung))
+    geschrieben.append(_editor(verbindung))
     shutil.rmtree(ordner, ignore_errors=True)
 
     print(f"{len(geschrieben)} Bilder in {ZIEL}")  # noqa: T201
