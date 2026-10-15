@@ -19,6 +19,7 @@ from __future__ import annotations
 import sqlite3
 
 from faktur import __version__
+from faktur.gui.befehle import Befehle
 from faktur.gui.listen import (
     DokumenteSeite,
     KundenSeite,
@@ -33,13 +34,14 @@ from faktur.gui.qt import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
-    QMenu,
     QMenuBar,
     QMessageBox,
     QSettings,
+    QSizePolicy,
     QSplitter,
     QStackedWidget,
     Qt,
+    QToolBar,
     QVBoxLayout,
     QWidget,
 )
@@ -101,6 +103,10 @@ class Fenster:
         self.leiste.setFrameShape(QListWidget.Shape.NoFrame)
         self.leiste.setSpacing(1)
         self.reihenfolge = [schluessel for schluessel, _t, _k in BEREICHE]
+
+        #: Die Befehle. Sie liegen an zwei Stellen im Fenster — im Menü
+        #: und auf dem Balken — und es sind immer dieselben Objekte.
+        self.befehle = Befehle(self.fenster)
         for schluessel, titel, _kuerzel in BEREICHE:
             eintrag = QListWidgetItem(titel)
             eintrag.setData(Qt.ItemDataRole.UserRole, schluessel)
@@ -153,7 +159,9 @@ class Fenster:
 
         self.fenster.statusBar().showMessage("Bereit")
 
+        self._befehle_verbinden()
         self._menue_bauen()
+        self._werkzeug_bauen()
         self._lage_laden()
         self.leiste.setCurrentRow(0)
 
@@ -249,8 +257,25 @@ class Fenster:
 
     # ------------------------------------------------------------------ menue
 
+    def _befehle_verbinden(self) -> None:
+        """Hängt jeden Befehl an das, was er tun soll.
+
+        Returns:
+            Nichts.
+        """
+        b = self.befehle
+        b.verbinde(b.kunde, self._neu)
+        b.verbinde(b.oeffnen, self._dokument_geoeffnet)
+        b.verbinde(b.angebot, self._neues_angebot)
+        b.verbinde(b.abrechnen, self._abrechnen)
+        b.verbinde(b.aendern, self._aendern)
+        b.verbinde(b.loeschen, self._loeschen)
+        b.verbinde(b.stilllegen, self._stilllegen)
+        b.verbinde(b.suchen, self._suchen)
+        b.verbinde(b.exportieren, self._exportieren)
+
     def _menue_bauen(self) -> None:
-        """Baut die Menüleiste und hängt die Kürzel daran.
+        """Baut die Menüleiste aus den Befehlen.
 
         Returns:
             Nichts.
@@ -270,38 +295,16 @@ class Fenster:
             Nichts.
         """
         datei = leiste.addMenu("&Datei")
+        b = self.befehle
 
-        self._taste(datei, "Neuer Kunde", "Ctrl+Shift+K", self._neu)
-        self._taste(datei, "Dokument öffnen", "Ctrl+O", self._dokument_geoeffnet)
-        self._taste(datei, "Neues Angebot", "Ctrl+N", self._neues_angebot)
-        self._taste(datei, "Aus Angebot abrechnen", "Ctrl+Shift+R", self._abrechnen)
-
+        for aktion in (b.kunde, b.oeffnen, b.angebot, b.abrechnen):
+            datei.addAction(aktion)
         datei.addSeparator()
-
-        aendern = QAction("Ändern", self.fenster)
-        aendern.setShortcut("Ctrl+E")
-        aendern.triggered.connect(self._aendern)
-        datei.addAction(aendern)
-
-        loeschen = QAction("Löschen", self.fenster)
-        loeschen.setShortcut("Backspace")
-        loeschen.triggered.connect(self._loeschen)
-        datei.addAction(loeschen)
-
-        stilllegen = QAction("Stilllegen", self.fenster)
-        stilllegen.triggered.connect(self._stilllegen)
-        datei.addAction(stilllegen)
-
+        for aktion in (b.aendern, b.loeschen, b.stilllegen):
+            datei.addAction(aktion)
         datei.addSeparator()
-
-        suche = QAction("Suchen", self.fenster)
-        suche.setShortcut("Ctrl+F")
-        suche.triggered.connect(self._suchen)
-        datei.addAction(suche)
-
-        self._taste(datei, "Exportieren…", "Ctrl+Shift+E")
-
-        datei.addSeparator()
+        for aktion in (b.suchen, b.exportieren):
+            datei.addAction(aktion)
 
     def _menue_ansicht(self, leiste: QMenuBar) -> None:
         """Baut das Menü *Ansicht*.
@@ -360,37 +363,43 @@ class Fenster:
         beenden.triggered.connect(self.fenster.close)
         faktur.addAction(beenden)
 
-    def _taste(
-        self,
-        menue: QMenu,
-        text: str,
-        kuerzel: str,
-        was: object = None,
-    ) -> QAction:
-        """Setzt einen Menüpunkt.
+    def _werkzeug_bauen(self) -> None:
+        """Baut den Balken über dem Fenster.
 
-        Args:
-            menue: Das Menü, in das er kommt.
-            text: Was darauf steht.
-            kuerzel: Das Tastenkürzel.
-            was: Wird gerufen, wenn der Punkt gewählt wird. Ohne Angabe
-                bleibt der Punkt vorerst ohne Wirkung — er steht schon da,
-                seine Tat kommt mit der Stufe, die sie baut.
+        **Auf dem Mac ein Teil der Titelleiste.** Ohne das steht ein
+        zweiter Streifen unter dem Titel, und das sieht nach zwei
+        Bedienleisten aus. ``setUnifiedTitleAndToolBarOnMac`` holt ihn
+        nach oben, wo er hingehört.
 
         Returns:
-            Der Menüpunkt.
+            Nichts.
         """
-        aktion = QAction(text, self.fenster)
-        aktion.setShortcut(kuerzel)
-        if was is not None:
-            aktion.triggered.connect(was)  # type: ignore[arg-type]
-        menue.addAction(aktion)
-        return aktion
+        leiste = QToolBar("Werkzeuge")
+        leiste.setObjectName("werkzeug")
+        leiste.setMovable(False)
+        leiste.setFloatable(False)
+        leiste.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
 
-    # --------------------------------------------------------------- aktionen
+        b = self.befehle
+        leiste.addAction(b.kunde)
+        leiste.addSeparator()
+        leiste.addAction(b.angebot)
+        leiste.addAction(b.abrechnen)
+
+        # Der Rest bleibt rechts. So wie in Velox: was man oft braucht,
+        # links; was man ab und an braucht, rechts.
+        luft = QWidget()
+        luft.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        leiste.addWidget(luft)
+
+        leiste.addAction(b.exportieren)
+
+        self.fenster.addToolBar(Qt.ToolBarArea.TopToolBarArea, leiste)
+        self.fenster.setUnifiedTitleAndToolBarOnMac(True)
+        self.werkzeug = leiste
 
     def _gewechselt(self, zeile: int) -> None:
-        """Wechselt in den gewählten Bereich.
+        """Wechselt in den gewaehlten Bereich.
 
         Args:
             zeile: Die Nummer der Zeile in der Seitenleiste.
@@ -531,6 +540,18 @@ class Fenster:
         was = self._aktion("stilllegen")
         if was is not None:
             was()
+
+    def _exportieren(self) -> None:
+        """Sagt, dass der Export noch nicht da ist.
+
+        **Der Knopf muss etwas sagen.** Ein Balkenknopf ohne Wirkung sieht
+        aus wie ein Programm, das klemmt — schlimmer als ein Knopf, den es
+        nicht gibt.
+
+        Returns:
+            Nichts.
+        """
+        self.melde("Der Export für den Steuerberater kommt als Nächstes.")
 
     def _suchen(self) -> None:
         """Springt in das Suchfeld der aktuellen Seite.

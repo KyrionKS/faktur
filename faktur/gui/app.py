@@ -32,10 +32,6 @@ __all__ = ["main"]
 #: festsetzt, macht das Programm auf beiden Systemen fremd — und die
 #: Oberfläche sähe auf macOS aus wie ein Windows-Programm.
 _STYLE = """
-#trenner {
-    background: palette(mid);
-}
-
 #leiste {
     background: transparent;
     border: none;
@@ -47,8 +43,14 @@ _STYLE = """
     alternate-background-color: palette(alternate-base);
 }
 
+/* Die graue Zweitzeile.
+
+   **Nicht ``palette(mid)``.** Auf diesem System ist Mid genau die
+   Hintergrundfarbe — der Text waere unsichtbar. ``palette(dark)`` hebt
+   sich von Window und Base ab und bleibt es auf dem Mac im hellen wie im
+   dunklen Thema. */
 #suchzeile, #zweit {
-    color: palette(mid);
+    color: palette(dark);
 }
 
 /* Der Kasten auf der Übersicht. Nur Systemfarben, damit er auf dem Mac

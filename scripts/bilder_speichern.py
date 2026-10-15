@@ -211,6 +211,9 @@ def _stammdaten(verbindung: object) -> Path:
     from faktur.gui.stammdaten import StammdatenSeite
 
     seite = StammdatenSeite(verbindung)
+    # Die Seite hat von selbst nur ihre Kleinste Groesse. Ohne das
+    # zeigte das Bild nicht, was man im Fenster wirklich sieht.
+    seite.resize(780, 640)
     seite.felder["firma"].setText("New Air Media Group")
     seite.felder["zusatz"].setText("Tonstudio & Medienproduktion")
     seite.felder["strasse"].setText("Beispielweg 12")

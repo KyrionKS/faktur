@@ -208,19 +208,39 @@ def test_jede_liste_hat_ein_erreichbares_suchfeld() -> None:
     )
 
 
-def test_und_die_taste_ist_auch_gebunden() -> None:
+def test_und_die_taste_ist_auch_gebunden(tmp_path: Path) -> None:
     """Eine Aktion ohne Taste hilft niemandem.
 
-    Args:
-        None
-    """
-    app_quelle = (WURZEL / "faktur" / "gui" / "fenster.py").read_text(encoding="utf-8")
+    Geprueft wird das **Fenster**, nicht sein Quelltext. Ein Test, der nach
+    einer Zeile wie ``suche.setShortcut("Ctrl+F")`` sucht, sagt nichts mehr
+    ueber das Programm, sobald sich der Befehl woanders hin verschiebt — und
+    genau das ist geschehen: Die Befehle liegen jetzt in ``befehle.py``,
+    weil sie im Menü *und* auf dem Balken stehen.
 
-    assert 'suche.setShortcut("Ctrl+F")' in app_quelle, (
-        "Die Aktion *Suchen* hat kein Kuerzel mehr."
+    Args:
+        tmp_path: Das Verzeichnis fuer die Datenbank.
+    """
+    from faktur import db
+    from faktur.gui.fenster import Fenster
+    from PySide6.QtWidgets import QApplication
+
+    laufend = QApplication.instance() or QApplication([])
+    fenster = Fenster(db.verbinden(tmp_path / "suche.db"))
+    # Ohne sichtbares Fenster gibt es keinen Fokus. Gemessen.
+    fenster.zeige()
+    laufend.processEvents()
+    suche = fenster.befehle.suchen
+
+    assert suche.shortcut().toString() == "Ctrl+F", (
+        f"Die Aktion *Suchen* hat das Kuerzel {suche.shortcut().toString()!r}."
     )
-    assert "suche.triggered.connect(self._suchen)" in app_quelle, (
-        "Die Aktion *Suchen* ist nicht mehr verdrahtet."
+    assert suche.isEnabled(), "Die Aktion *Suchen* ist abgeschaltet."
+
+    # Und sie tut etwas: der Fokus wandert ins Suchfeld.
+    fenster.gehe("kunden")
+    suche.trigger()
+    assert fenster.seite().suchfeld.hasFocus(), (
+        "Cmd+F hat den Fokus nicht ins Suchfeld gesetzt."
     )
 
 
