@@ -319,3 +319,151 @@ def test_und_die_seite_braucht_kein_fenster_zum_speichern(tmp_path: Path) -> Non
     assert seite.speichern() is True
     assert einstellungen.hole(verbindung, "firma") == "Tonstudio Nordwind"
     verbindung.close()
+
+
+# --------------------------------------------------------- Die Platzhalter
+
+
+def _briefseite(fenster: Fenster) -> StammdatenSeite:
+    """Öffnet den Reiter *Brieftexte*.
+
+    Args:
+        fenster: Das Fenster.
+
+    Returns:
+        Die Stammdatenseite, wie sie im Fenster hängt.
+    """
+    fenster.gehe("stammdaten")
+    fenster.seite().reiter.setCurrentIndex(2)  # type: ignore[attr-defined]
+    return fenster.seite()  # type: ignore[return-value]
+
+
+def test_und_jeder_platzhalter_steht_da_mit_klammern(fenster: Fenster) -> None:
+    """Der Platzhalter steht so da, wie man ihn schreibt.
+
+    Vorher stand dort ein grauer Fließtext aus Namen ohne Klammern. Wer
+    ``Anzahl_Positionen`` davorsetzt und dann eine geschweifte Klammer
+    vergisst, bekommt einen Text, der auf keinem Beleg aussieht wie der.
+
+    Args:
+        fenster: Das Fenster.
+    """
+    seite = _briefseite(fenster)
+    gefunden = {
+        seite.platzhalter.item(zeile, 0).text()  # type: ignore[attr-defined]
+        for zeile in range(seite.platzhalter.rowCount())  # type: ignore[attr-defined]
+    }
+
+    erwartet = {f"{{{{{name}}}}}" for name in einstellungen.PLATZHALTER}
+
+    assert gefunden == erwartet, (
+        "In der Tabelle stehen andere Platzhalter als im Programm: "
+        f"{gefunden ^ erwartet}"
+    )
+
+
+def test_und_jeder_platzhalter_zeigt_was_daraus_wird(fenster: Fenster) -> None:
+    """ "wird zu" steht in jeder Zeile — sonst steht da nur ein Name.
+
+    Args:
+        fenster: Das Fenster.
+    """
+    seite = _briefseite(fenster)
+    leer = [
+        seite.platzhalter.item(zeile, 0).text()  # type: ignore[attr-defined]
+        for zeile in range(seite.platzhalter.rowCount())  # type: ignore[attr-defined]
+        if not seite.platzhalter.item(zeile, 1)  # type: ignore[attr-defined]
+    ]
+
+    assert leer == [], f"Ohne Beispiel: {leer}"
+
+
+def test_und_kein_platzhalter_ist_unerklärt() -> None:
+    """Jeder Platzhalter bekommt eine Erklärung.
+
+    Eine Tabelle, die nur Namen zeigt, beantwortet die Frage nicht, die
+    man beim Nachschlagen hat: *was* kommt da hin?
+
+    Returns:
+        Nichts.
+    """
+    from faktur.gui.stammdaten import _BEDEUTUNG
+
+    assert set(_BEDEUTUNG) == set(einstellungen.PLATZHALTER), (
+        "Erklärt, aber kein Platzhalter: "
+        f"{set(_BEDEUTUNG) - set(einstellungen.PLATZHALTER)}; "
+        "Platzhalter, aber nicht erklärt: "
+        f"{set(einstellungen.PLATZHALTER) - set(_BEDEUTUNG)}"
+    )
+
+
+def test_und_doppelklick_setzt_an_die_schreibmarke(fenster: Fenster) -> None:
+    """Der Platzhalter landet dort, wo man zuletzt getippt hat.
+
+    Args:
+        fenster: Das Fenster.
+    """
+    seite = _briefseite(fenster)
+    feld = seite.bausteine["text_angebot"]
+    feld.setFocus()
+    feld.setPlainText("Hallo ")
+    feld.moveCursor(feld.textCursor().MoveOperation.End)
+
+    seite._platzhalter_eingesetzt(zeilen_von(seite, "{{Betrag}}"), 0)  # noqa: SLF001
+
+    assert feld.toPlainText() == "Hallo {{Betrag}}", (
+        f"Im Feld steht {feld.toPlainText()!r}"
+    )
+
+
+def test_und_es_gerät_in_das_feld_in_dem_man_war(fenster: Fenster) -> None:
+    """Zwei Felder, zwei Zielorte.
+
+    Args:
+        fenster: Das Fenster.
+    """
+    seite = _briefseite(fenster)
+    angebot = seite.bausteine["text_angebot"]
+    rechnung = seite.bausteine["text_rechnung"]
+
+    rechnung.setFocus()
+    rechnung.setPlainText("Rechnung ")
+    rechnung.moveCursor(rechnung.textCursor().MoveOperation.End)
+
+    seite._platzhalter_eingesetzt(zeilen_von(seite, "{{Kunde}}"), 0)  # noqa: SLF001
+
+    assert rechnung.toPlainText() == "Rechnung {{Kunde}}"
+    assert angebot.toPlainText() == "", "Der Angebotstext wurde mitbeschrieben"
+
+
+def test_und_ohne_textfeld_sagt_es_das(fenster: Fenster) -> None:
+    """Wer noch nirgends war, bekommt einen Hinweis statt eines Absturz.
+
+    Args:
+        fenster: Das Fenster.
+    """
+    seite = _briefseite(fenster)
+    seite._zuletzt.feld = None  # noqa: SLF001
+
+    seite._platzhalter_eingesetzt(zeilen_von(seite, "{{Kunde}}"), 0)  # noqa: SLF001
+
+    assert fenster.fenster.statusBar().currentMessage() != "", (
+        "Faktur hat gar nichts gesagt."
+    )
+
+
+def zeilen_von(seite: StammdatenSeite, gesucht: str) -> int:
+    """Findet die Zeile eines Platzhalters.
+
+    Args:
+        seite: Die Stammdatenseite.
+        gesucht: Der Platzhalter mit Klammern.
+
+    Returns:
+        Die Zeilennummer. ``-1``, wenn er nicht dasteht.
+    """
+    for zeile in range(seite.platzhalter.rowCount()):  # type: ignore[attr-defined]
+        eintrag = seite.platzhalter.item(zeile, 0)  # type: ignore[attr-defined]
+        if eintrag is not None and eintrag.text() == gesucht:
+            return zeile
+    return -1

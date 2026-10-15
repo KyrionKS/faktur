@@ -237,39 +237,41 @@ def test_zwei_angebote_mit_der_nummer_heißen_gleich(
     )
 
 
-@pytest.mark.skip(reason="Kommt mit dem Dokumentfenster in Stufe 4")
-def test_und_davor_wird_gefragt() -> None:
-    """Beim Speichern wird nachgefragt, wenn die Datei schon da ist.
+def test_und_die_pdf_wird_nur_an_einer_stelle_geschrieben() -> None:
+    """Genau ein Ort schreibt eine PDF.
 
-    Bis 0.9.0 stand das im Bildschirm. Im Fenster gehoert es in das
-    Dokumentfenster, das es noch nicht gibt — bis dahin kann der Test nur
-    sagen, dass es offen ist, nicht dass es stimmt.
+    Zwei Orte hiessen: einer davon fragt, der andere nicht — und welcher
+    davon greift, entschiede der Zufall.
 
     Raises:
-        AssertionError: Wenn nicht nachgefragt wird.
+        AssertionError: Wenn es mehr als einen gibt.
     """
-    quelle = "\n".join(
-        datei.read_text(encoding="utf-8") for datei in sorted(GUI.glob("*.py"))
-    )
+    orte = [
+        datei.name
+        for datei in sorted(GUI.glob("*.py"))
+        if "pdf.erzeugen(" in datei.read_text(encoding="utf-8")
+    ]
 
-    assert "is_file()" in quelle, "Es wird nicht geprueft, ob die Datei schon da ist."
-    assert "gibt es schon" in quelle, "Es wird nicht nachgefragt."
-    assert "Ueberschreiben" in quelle, "Die Frage sagt nicht, was passiert."
+    assert len(orte) == 1, f"PDF werden an {len(orte)} Stellen geschrieben: {orte}"
 
 
-@pytest.mark.skip(reason="Kommt mit dem Dokumentfenster in Stufe 4")
-def test_und_neu_schreiben_fragt_nicht() -> None:
-    """„PDF neu schreiben" soll ja ueberschreiben.
+def test_und_es_gibt_kein_neu_schreiben_mhr() -> None:
+    """Es gibt nur noch einen Weg — und der fragt immer.
+
+    Bis 0.9.0 gab es *PDF neu schreiben*, das ohne jede Frage ueber-
+    schrieben hat. Jetzt wird der Ort jedes Mal neu gewaehlt, und der
+    Dialog des Systems fragt bei einer vorhandenen Datei von selbst.
 
     Raises:
-        AssertionError: Wenn auch dort nachgefragt wird.
+        AssertionError: Wenn es eine eigene Frage gibt.
     """
     quelle = "\n".join(
         datei.read_text(encoding="utf-8") for datei in sorted(GUI.glob("*.py"))
     )
 
     assert "gibt es schon" not in quelle, (
-        "Auch beim bewussten Neu-Schreiben wird nachgefragt. Das nervt."
+        "Es gibt wieder eine eigene Frage. Der Dialog des Systems fragt "
+        "selbst — eine eigene Frage fragt nochmal."
     )
 
 

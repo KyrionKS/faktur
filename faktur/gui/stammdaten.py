@@ -16,16 +16,21 @@ import sqlite3
 
 from faktur import einstellungen, gestaltung
 from faktur.gui.qt import (
+    QAbstractItemView,
     QComboBox,
     QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QScrollArea,
+    Qt,
+    QTableWidget,
+    QTableWidgetItem,
     QTabWidget,
     QTextEdit,
     QVBoxLayout,
@@ -66,6 +71,84 @@ _BRIEFTE: tuple[tuple[str, str], ...] = (
 #: Wer einstellt, sieht aber Wörter, keine Faktoren.
 _GROESSEN = {"klein": "Klein", "normal": "Normal", "gross": "Groß"}
 
+#: Was die Platzhalter bedeuten, fuer den Hinweis beim Darueberfahren.
+_BEDEUTUNG = {
+    "Kunde": "die Firma",
+    "Kunde_Anrede": "die Anrede mit Namen, z. B. „Herr Mustermann“",
+    "Ansprechpartner": "die Person in der Firma",
+    "Nummer": "die Projektnummer",
+    "Datum": "das Datum des Dokuments",
+    "Faellig": "das Fälligkeitsdatum",
+    "Gueltig_bis": "das Ablaufdatum eines Angebots",
+    "Betrag": "die Summe, z. B. „3.290,00 €“",
+    "Anzahl_Positionen": "die Zahl der Positionen",
+    "EigeneFirma": "der Name der New Air Media Group",
+    "EigeneFirma_voll": "der Name mit Zusatz",
+    "Bank": "die Bank",
+    "IBAN": "die IBAN",
+}
+
+
+def beschreibung_fuer(name: str, beispiel: str) -> str:
+    """Baut den Hinweis fuer einen Platzhalter.
+
+    Args:
+        name: Der Name des Platzhalters, ohne Klammern.
+        beispiel: Das, was im Beispiel eingesetzt wird.
+
+    Returns:
+        Der Text fuer den Tooltip.
+    """
+    was = _BEDEUTUNG.get(name, "siehe Anleitung")
+    return f"{{{{{name}}}}} — {was}, im Beispiel „{beispiel}“"
+
+
+class _Merker:
+    """Weiss, in welchem Textfeld zuletzt getippt wurde.
+
+    Attributes:
+        feld: Das Textfeld, das zuletzt den Fokus hatte.
+    """
+
+    def __init__(self) -> None:
+        """Legt den Merker an."""
+        self.feld: object | None = None
+
+
+class BriefFeld(QTextEdit):
+    """Ein Textfeld, das sich meldet, wenn es in den Vordergrund kommt.
+
+    Ohne das wüsste die Seite nicht, wohin ein Platzhalter gehört: Der
+    Nutzer klickt in den Angebotstext, dann auf die Tabelle, und dann ist
+    das Feld nicht mehr im Fokus — sein Cursor steht aber noch richtig.
+
+    Attributes:
+        merker: Wohin gemeldet wird.
+    """
+
+    def __init__(self, text: str = "") -> None:
+        """Legt das Feld an.
+
+        Args:
+            text: Der Anfangstext.
+        """
+        super().__init__()
+        self.setPlainText(text)
+        self.merker: object | None = None
+
+    def focusInEvent(self, ereignis: object) -> None:  # noqa: N802
+        """Merkt sich, dass dieses Feld drank ist.
+
+        Args:
+            ereignis: Das Ereignis von Qt.
+
+        Returns:
+            Nichts.
+        """
+        if self.merker is not None:
+            self.merker.feld = self  # type: ignore[attr-defined]
+        super().focusInEvent(ereignis)  # type: ignore[arg-type]
+
 
 class StammdatenSeite(Seite):
     """Die Seite mit Firma, Bank, Brieftexten und Aussehen.
@@ -97,13 +180,14 @@ class StammdatenSeite(Seite):
         self.ohne_suche()
 
         self.felder: dict[str, QLineEdit] = {}
-        self.bausteine: dict[str, QTextEdit] = {}
+        self.bausteine: dict[str, BriefFeld] = {}
+        self._zuletzt = _Merker()
 
-        reiter = QTabWidget()
-        reiter.addTab(_in_rahmen(self._reiter_firma()), "Firma")
-        reiter.addTab(_in_rahmen(self._reiter_bank()), "Bank")
-        reiter.addTab(_in_rahmen(self._reiter_briefe()), "Brieftexte")
-        reiter.addTab(_in_rahmen(self._reiter_aussehen()), "Aussehen")
+        self.reiter = QTabWidget()
+        self.reiter.addTab(_in_rahmen(self._reiter_firma()), "Firma")
+        self.reiter.addTab(_in_rahmen(self._reiter_bank()), "Bank")
+        self.reiter.addTab(_in_rahmen(self._reiter_briefe()), "Brieftexte")
+        self.reiter.addTab(_in_rahmen(self._reiter_aussehen()), "Aussehen")
 
         speichern = QPushButton("Speichern")
         speichern.setObjectName("haupt")
@@ -113,7 +197,7 @@ class StammdatenSeite(Seite):
         leiste.addStretch(1)
         leiste.addWidget(speichern)
 
-        self._koerper.addWidget(reiter, 1)
+        self._koerper.addWidget(self.reiter, 1)
         self._koerper.addLayout(leiste)
 
         self._fuellen()
@@ -174,12 +258,13 @@ class StammdatenSeite(Seite):
             "geschweiften Klammern werden ersetzt."
         )
         anordnung = QVBoxLayout(kasten)
-        anordnung.setSpacing(10)
+        anordnung.setSpacing(8)
 
         for schluessel, beschriftung in _BRIEFTE:
             anordnung.addWidget(QLabel(f"<b>{beschriftung}</b>"))
-            feld = QTextEdit(einstellungen.baustein(self.db, schluessel))
+            feld = BriefFeld(einstellungen.baustein(self.db, schluessel))
             feld.setObjectName("baustein")
+            feld.merker = self._zuletzt
             self.bausteine[schluessel] = feld
             anordnung.addWidget(feld, 1)
 
@@ -189,19 +274,85 @@ class StammdatenSeite(Seite):
     def _platzhalter(self) -> QWidget:
         """Baut die Liste der Platzhalter auf.
 
+        **Als Tabelle mit den Klammern, wie sie in den Text gehören.**
+        Vorher stand dort ein Fließtext aus Namen ohne Klammern, grau und
+        klein. Man musste raten, wie man einen davon schreibt, und auf dem
+        Mac ist „{{Kunde}}" nicht dasselbe wie „{ Kunde }".
+
+        Doppelklick auf eine Zeile setzt sie an die Schreibmarke des
+        Textfeldes, in dem man zuletzt war.
+
         Returns:
             Das Widget.
         """
-        beschriftung = QLabel(
-            "Ersetzt werden: " + ", ".join(sorted(einstellungen.PLATZHALTER))
-        )
+        beschriftung = QLabel("Doppelklick setzt den Platzhalter an die Schreibmarke.")
         beschriftung.setObjectName("zweit")
-        beschriftung.setWordWrap(True)
+
+        tabelle = QTableWidget(len(einstellungen.PLATZHALTER), 2)
+        tabelle.setObjectName("tabelle")
+        tabelle.setHorizontalHeaderLabels(["Platzhalter", "wird zu"])
+        tabelle.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tabelle.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        tabelle.setAlternatingRowColors(True)
+        tabelle.verticalHeader().setVisible(False)
+        tabelle.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents
+        )
+        tabelle.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
+
+        for nummer, (name, beispiel) in enumerate(
+            sorted(einstellungen.PLATZHALTER.items())
+        ):
+            feld = QTableWidgetItem(f"{{{{{name}}}}}")
+            feld.setData(Qt.ItemDataRole.UserRole, name)
+            feld.setToolTip(beschreibung_fuer(name, beispiel))
+            tabelle.setItem(nummer, 0, feld)
+            tabelle.setItem(nummer, 1, QTableWidgetItem(beispiel))
+
+        tabelle.cellDoubleClicked.connect(self._platzhalter_eingesetzt)
+
         huelle = QWidget()
         anordnung = QVBoxLayout(huelle)
         anordnung.setContentsMargins(0, 0, 0, 0)
+        anordnung.setSpacing(6)
         anordnung.addWidget(beschriftung)
+        anordnung.addWidget(tabelle)
+        self.platzhalter = tabelle
         return huelle
+
+    def _platzhalter_eingesetzt(self, zeile: int, spalte: int) -> None:
+        """Setzt einen Platzhalter an die Schreibmarke.
+
+        Args:
+            zeile: Die Zeile in der Tabelle.
+            spalte: Die Spalte. Wird ignoriert, weil beide gleich sind.
+
+        Returns:
+            Nichts.
+        """
+        del spalte
+        eintrag = self.platzhalter.item(zeile, 0)
+        if eintrag is None:
+            return
+        self._einsetzen(str(eintrag.text()))
+
+    def _einsetzen(self, platzhalter: str) -> None:
+        """Schreibt einen Platzhalter in das zuletzt benutzte Textfeld.
+
+        Args:
+            platzhalter: Der Platzhalter mit Klammern.
+
+        Returns:
+            Nichts.
+        """
+        feld = self._zuletzt.feld
+        if feld is None:
+            self.melde("Erst in einen Brieftext klicken.")
+            return
+        feld.insertPlainText(platzhalter)
+        feld.setFocus()
 
     def _reiter_aussehen(self) -> QWidget:
         """Baut den Reiter *Aussehen*.
@@ -350,4 +501,4 @@ def _rechts() -> object:
     return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
 
 
-__all__ = ["StammdatenSeite"]
+__all__ = ["BriefFeld", "StammdatenSeite"]

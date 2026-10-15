@@ -16,8 +16,8 @@ from faktur import betraege, dateien, offen
 from faktur.gui.aktionen import (
     KUNDENFELDER,
     LEISTUNGFELDER,
-    Bearbeitbar,
     KundenAktionen,
+    LeistungsAktionen,
     kunden_haken,
 )
 from faktur.gui.seite import ListenSeite
@@ -188,7 +188,9 @@ class LeistungenSeite(ListenSeite):
             vergleiche={2: nach_zahl(2)},
         )
         self.zeige_auch_archiv = False
-        self.aktionen = Bearbeitbar(self, LEISTUNGFELDER, "Leistung", "Leistungen")
+        self.aktionen = LeistungsAktionen(
+            self, LEISTUNGFELDER, "Leistung", "Leistungen"
+        )
         kunden_haken(self).setText("auch stillgelegte")
 
     def hole(self) -> list[sqlite3.Row]:

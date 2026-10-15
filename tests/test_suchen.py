@@ -22,9 +22,6 @@ nichts tut. Genau daran ist die Suchtaste gescheitert.
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
 from faktur.suchen import filtern, passt, sichtbar
 
 #: Vier Zeilen zum Suchen.
@@ -175,60 +172,22 @@ def test_die_sichtbare_liste_haelt_die_reihenfolge() -> None:
 
 
 # ------------------------------------------- keine Taste darf ins Leere zeigen
-
-
-BINDINGS_MUSTER = 'Binding("{taste}", "{aktion}"'
-
-
-def _bindings() -> list[tuple[Path, int, str, str]]:
-    """Sucht alle Tastenbindungen im Projekt.
-
-    Returns:
-        Datei, Zeilennummer, Taste und Aktion.
-    """
-    gefunden: list[tuple[Path, int, str, str]] = []
-
-    for datei in sorted((Path(__file__).resolve().parents[1] / "faktur").rglob("*.py")):
-        zeilen = datei.read_text(encoding="utf-8").splitlines()
-        for nummer, zeile in enumerate(zeilen):
-            if 'Binding("' not in zeile:
-                continue
-
-            rest = zeile.split('Binding("', 1)[1]
-            if '", "' not in rest:
-                continue
-            taste, aktion = rest.split('", "', 1)[0], rest.split('", "', 1)[1]
-            aktion = aktion.split('"', 1)[0]
-
-            if taste and aktion:
-                gefunden.append((datei, nummer + 1, taste, aktion))
-
-    return gefunden
-
-
-@pytest.mark.parametrize(
-    ("datei", "nummer", "taste", "aktion"),
-    _bindings(),
-    ids=[f"{d.name}:{n}-{t}" for d, n, t, _ in _bindings()],
-)
-def test_jede_angezeigte_taste_hat_etwas_dahinter(
-    datei: Path, nummer: int, taste: str, aktion: str
-) -> None:
-    """Eine Taste, die nichts tut, ist schlimmer als keine.
-
-    Sie steht in der Fusszeile und tut dann nichts. Genau das ist die
-    Suchtaste auf der Kundenliste monatelang passiert.
-
-    Args:
-        datei: Die Datei mit der Bindung.
-        nummer: Die Zeilennummer, nur fuer die Meldung.
-        taste: Die Taste.
-        aktion: Die Aktion, die sie aufruft.
-    """
-    quelle = datei.read_text(encoding="utf-8")
-    gefunden = f"def action_{aktion}(" in quelle or f"def {aktion}(" in quelle
-
-    assert gefunden, (
-        f"{datei.name}:{nummer}: Die Taste {taste} ruft action_{aktion} auf, "
-        "und die gibt es nicht. Die Taste tut nichts."
-    )
+#
+# Bis hierher stand hier ein Test, der alle Tastenbindungen der Oberflaeche
+# einsammelte und nachsah, ob die aufgerufene Methode wirklich existiert.
+# Er suchte ``Binding("...")`` — das ist die Schreibweise von Textual, und
+# seit dem Umbauf auf PySide6 gibt es das nicht mehr.
+#
+# Der Test lief also stillschweigend mit **leerem** Parametersatz durch und
+# pruefte nichts. Ein Wächter, der nichts prüft, ist schlimmer als keiner:
+# Er sieht aus wie eine Zusicherung.
+#
+# Die Zusicherung selbst ist nicht weg, sie steht nur woanders und prüft
+# das echte Fenster statt eines Quelltextes:
+#
+# - ``tests/test_werkzeugleiste.py::test_und_kein_kuerzel_fehrt_zweimal``
+#   — kein Kürzel hängt an zwei Befehlen.
+# - ``tests/test_tasten.py::test_und_das_kuerzel_tut_auf_der_seite_auch_das``
+#   — ⌘E öffnet das Blatt des Eintrags, der auf der offenen Seite markiert
+#   ist.
+#

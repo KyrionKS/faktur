@@ -58,6 +58,7 @@ class Bearbeitbar:
         felder: tuple[Feld, ...],
         einheit: str,
         mehrzahl: str,
+        stilllegen: bool = True,
     ) -> None:
         """Hängt die Aktionen an die Seite.
 
@@ -66,16 +67,31 @@ class Bearbeitbar:
             felder: Die Felder des Formulars.
             einheit: Der Singular, etwa *Kunde*.
             mehrzahl: Der Plural davon, etwa *Kunden*.
+            stilllegen: Ob es diese Taste geben soll. Bei einer Leistung
+                nicht — siehe :class:`LeistungsAktionen`.
         """
         self.seite = seite
         self.felder = felder
         self.einheit = einheit
         self.mehrzahl = mehrzahl
+        self.hat_stilllegen = stilllegen
 
-        seite.knopf("Neu", self.neu, "⌘N", spitz=True)
+        # **Nur Kürzel, die hier wirklich dasselbe tun.**
+        #
+        # Auf diesen Tasten stand früher überall „⌘N". Das war falsch:
+        # ⌘N gehört dem Menü und dem Balken, und die machen dort *ein
+        # Angebot*. Wer auf der Kundenliste ⌘N tippte, bekam ein Angebot
+        # und keine Kundin. Ein Kürzel, das etwas anderes tut als sein
+        # Knopf verspricht, ist schlimmer als keines.
+        #
+        # Ändern und Löschen gehen anders: Die gehören dem Fenster und
+        # wirken auf die Markierung der Seite, die gerade offen ist. Dort
+        # stimmt das Kürzel.
+        seite.knopf("Neu", self.neu, spitz=True)
         seite.knopf("Ändern", self.aendern, "⌘E")
         seite.knopf("Löschen", self.loeschen, "⌫")
-        seite.knopf("Stilllegen", self.stilllegen)
+        if stilllegen:
+            seite.knopf("Stilllegen", self.stilllegen)
 
         # Doppelklick macht dasselbe wie *Ändern*. Das ist der Weg, den
         # man in Mail, Notizen und überall sonst erwartet, und man muss
@@ -265,6 +281,33 @@ class Bearbeitbar:
         return f"„{name}“ wirklich löschen? Das lässt sich nicht zurücknehmen."
 
 
+class LeistungsAktionen(Bearbeitbar):
+    """Die Aktionen auf der Leistungsliste.
+
+    **Ohne *Stilllegen*.** :func:`faktur.dateien.leistung_loeschen` nimmt
+    nur die Verknüpfung von den Positionen — auf alten Belegen stehen Text
+    und Preis weiter. Es geht also nichts verloren, wenn eine Leistung aus
+    der Preisliste verschwindet.
+
+    Die Spalte ``aktiv`` gibt es trotzdem, weil sie schon vor der
+    Oberflaeche da war. Nur eben ohne Bedienung: Sie zu Fuellen waere ein
+    zweiter Weg zum selben Ziel, und der waere nicht der schnellere.
+    """
+
+    def __init__(
+        self, seite: object, felder: tuple[Feld, ...], einheit: str, mehrzahl: str
+    ) -> None:
+        """Hängt die Aktionen an die Leistungsliste.
+
+        Args:
+            seite: Die Leistungsliste.
+            felder: Die Felder des Formulars.
+            einheit: Der Singular, etwa *Leistung*.
+            mehrzahl: Der Plural davon.
+        """
+        super().__init__(seite, felder, einheit, mehrzahl, stilllegen=False)
+
+
 class KundenAktionen(Bearbeitbar):
     """Die Aktionen auf der Kundenliste."""
 
@@ -352,5 +395,6 @@ __all__ = [
     "LEISTUNGFELDER",
     "Bearbeitbar",
     "KundenAktionen",
+    "LeistungsAktionen",
     "kunden_haken",
 ]
