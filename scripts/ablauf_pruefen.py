@@ -237,17 +237,60 @@ def durchlauf(fenster: Fenster, app: QApplication, protokoll: Protokoll) -> None
     # Nicht nach *irgendeiner* Tabelle fragen: Die Stammdatenseite hat in
     # den Brieftexten inzwischen selbst eine, und galt dadurch als fertig
     # — wodurch ihre Pruefung ersatzlos wegfiel.
+    _stammdaten_pruefen(fenster, fenster.seiten["stammdaten"], protokoll)
+
     for _schluessel, titel, _kuerzel in BEREICHE:
-        seite = fenster.seiten[_schluessel]
-        if _hat_liste(seite):
+        if _schluessel in _EIGENES_GEPRUEFT:
             continue
-        if _schluessel == "stammdaten":
-            _stammdaten_pruefen(fenster, seite, protokoll)
+        if _hat_liste(fenster.seiten[_schluessel]):
             continue
         protokoll.noch_nicht(f"Bereich {titel} hat noch keinen Inhalt")
     _formular_pruefen(fenster, app, protokoll)
     _dokument_pruefen(fenster, app, protokoll)
-    protokoll.noch_nicht("Export und die Zahlen auf der Übersicht")
+    _uebersicht_pruefen(fenster, app, protokoll)
+    protokoll.noch_nicht("Export fuer den Steuerberater")
+
+
+#: Bereiche, die nicht ueber eine Listenpage laufen und deshalb eine
+#: eigene Pruefung bekommen.
+#:
+#: **Ausdruecklich, nicht aus der Form geschlossen.** Uebersicht und
+#: Stammdaten tragen beide eine Tabelle, aber keine Listenpage: die eine
+#: zeigt Monatssummen, die andere Platzhalter. Vorher standen beide in der
+#: Schleife ueber die *nicht gebauten* Bereiche, und die Uebersicht stand
+#: dort, weil sie kein Listenmodell hat — obwohl sie fertig war.
+_EIGENES_GEPRUEFT = frozenset({"stammdaten", "uebersicht"})
+
+
+def _uebersicht_pruefen(fenster: Fenster, app: object, protokoll: Protokoll) -> None:
+    """Prueft, dass auf der Uebersicht Zahlen stehen.
+
+    Nicht, *welche* — das machen die Tests mit genauen Betraegen. Hier
+    geht es um das grobe: Es steht etwas da, und es steht etwas da, das
+    eine Zahl ist.
+
+    Args:
+        fenster: Das Fenster.
+        app: Die Qt-Anwendung.
+        protokoll: Wohin das Ergebnis kommt.
+
+    Returns:
+        Nichts.
+    """
+    fenster.gehe("uebersicht")
+    app.processEvents()
+    seite = fenster.seite()
+
+    fehlen = [name for name, gross in seite._gross.items() if gross.text() == "—"]
+    if fehlen:
+        protokoll.schlecht("Uebersicht", f"laesst {fehlen} ohne Zahl")
+        return
+    protokoll.ok(f"Uebersicht zeigt {len(seite._gross)} Zahlen")
+
+    if seite._monats_tabelle.rowCount():
+        protokoll.ok(f"und {seite._monats_tabelle.rowCount()} Monate")
+    else:
+        protokoll.schlecht("Uebersicht", "zeigt keine Monate")
 
 
 def _hat_liste(seite: object) -> bool:

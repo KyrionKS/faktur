@@ -19,7 +19,16 @@ from pathlib import Path
 import pytest
 from faktur import dateien, db, offen
 
-HEUTE = "2026-10-08"
+#: Der Stichtag — **in der Schreibweise, die das Programm wirklich
+#: benutzt.**
+#:
+#: Vorher stand hier ``"2026-10-08"``, also in ISO. Damit passte der Test
+#: zu ``ist_faellig``, das innen ``isoformat()`` erzeugt — aber der einzige
+#: Aufrufer im Programm übergibt :func:`faktur.betraege.heute`, und die
+#: liefert ``TT.MM.JJJJ``. Der Test prüfte also eine Schreibweise, die im
+#: Betrieb nicht vorkommt, und die Seite *Offene Forderungen* zeigte
+#: darum so gut wie nie *überfällig*.
+HEUTE = "08.10.2026"
 
 
 def rechnung_anlegen(
@@ -389,3 +398,70 @@ def test_eine_bestehende_rechnung_bleibt_offen(tmp_path: Path) -> None:
     assert offen.summe_offen(neu) == pytest.approx(850.0)
 
     neu.close()
+
+
+# ------------------------------------- Der Weg, den das Programm wirklich geht
+
+
+def test_und_das_gilt_fuer_das_datum_wie_es_das_programm_bekommt(
+    verbindung: sqlite3.Connection,
+) -> None:
+    """**Dieser Test ist der Grund fuer den ganzen Abschnitt.**
+
+    :func:`faktur.offen.ist_faellig` vergleicht zwei Daten. In den Tests
+    stand links ein Datum in ISO und rechts eines in deutscher
+    Schreibweise — und damit war die Frist praktisch nie abgelaufen. Ein
+    Beleg mit Frist seit dem 1. Januar 2020 wurde nicht als *überfällig*
+    gemeldet, an einem 8. Oktober.
+
+    Geprueft wird deshalb der Aufruf, wie er im Fenster steht:
+    ``beträge.heute()``.
+
+    Args:
+        verbindung: Die Datenbankverbindung.
+    """
+    from faktur import betraege
+
+    kennung = rechnung_anlegen(verbindung, nummer="0001", faellig="01.01.2020")
+
+    assert (
+        offen.ist_faellig(dateien.dokument_holen(verbindung, kennung), betraege.heute())
+        is True
+    ), "Eine seit 2020 abgelaufene Rechnung wird nicht als überfällig gemeldet."
+
+
+def test_und_und_umgekehrt(
+    verbindung: sqlite3.Connection,
+) -> None:
+    """Eine Frist in der Zukunft ist nicht überfällig.
+
+    Args:
+        verbindung: Die Datenbankverbindung.
+    """
+    from faktur import betraege
+
+    kennung = rechnung_anlegen(verbindung, nummer="0002", faellig="31.12.2099")
+
+    assert (
+        offen.ist_faellig(dateien.dokument_holen(verbindung, kennung), betraege.heute())
+        is False
+    )
+
+
+def test_und_die_ueberfaelligen_summieren_sich_richtig(
+    verbindung: sqlite3.Connection,
+) -> None:
+    """Die überfälligen sind eine Teilmenge der offenen, nicht alle.
+
+    Args:
+        verbindung: Die Datenbankverbindung.
+    """
+    alt = rechnung_anlegen(verbindung, nummer="0003", faellig="01.01.2020", preis="100")
+    neu = rechnung_anlegen(verbindung, nummer="0004", faellig="31.12.2099", preis="250")
+    del alt, neu
+
+    alles = offen.summe_offen(verbindung)
+    dringend = offen.summe_ueberfaellig(verbindung)
+
+    assert dringend == 100.0, f"Ueberfaellig sind {dringend}, erwartet 100"
+    assert dringend < alles, "Ueberfaellig und offen sind dieselbe Zahl"

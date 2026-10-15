@@ -48,16 +48,25 @@ def ist_bezahlt(dokument: sqlite3.Row) -> bool:
 def ist_faellig(dokument: sqlite3.Row, heute: str) -> bool:
     """Sagt, ob eine offene Rechnung überfaellig ist.
 
-    **Das Datum wird erst gelesen, dann verglichen.** In der Datenbank
-    steht es als ``TT.MM.JJJJ``, und als Text verglichen stimmt sich das
-    nur innerhalb desselben Jahres: „05.11.2026" ist kleiner als
-    „15.10.2026", weil 0 kleiner ist als 1 — obwohl der 5. November
-    später liegt. Deshalb wird beides zu einem Objekt gemacht und dann
-    verglichen.
+    **Beide Daten erst gelesen, dann verglichen.** In der Datenbank steht
+    es als ``TT.MM.JJJJ``, und als Text verglichen stimmt sich das nur
+    innerhalb desselben Jahres: „05.11.2026" ist kleiner als „15.10.2026",
+    weil 0 kleiner ist als 1 — obwohl der 5. November später liegt.
+
+    **Auch ``heute`` wird gelesen.** Vorher stand hier
+    ``gefunden.isoformat() < heute``: links stand ein Datum in ISO, rechts
+    eines in deutscher Schreibweise, und der Vergleich war ein Vergleich
+    zweier Varioussprachen. „2020-01-01" gegen „15.10.2026" — die erste
+    Zahl beginnt mit 2, die zweite mit 1, also war die Frist praktisch nie
+    abgelaufen. Im Bild stand darum so gut wie nie *überfällig*, und die
+    Seite *Offene Forderungen* hatte die dringenden Fälle nicht zu zeigen.
+    Der Test daneben bestand, weil er ``heute`` in ISO übergab — ein
+    Format, das der einzige Aufrufer im Programm nie benutzt.
 
     Args:
         dokument: Das Dokument mit ``faellig`` und ``bezahlt_am``.
-        heute: Das heutige Datum als ``JJJJ-MM-TT``.
+        heute: Das heutige Datum. Wie :func:`faktur.betraege.datum` es
+            schreibt, also ``TT.MM.JJJJ``. ISO geht auch.
 
     Returns:
         ``True``, wenn die Frist abgelaufen und nichts bezahlt wurde.
@@ -69,15 +78,17 @@ def ist_faellig(dokument: sqlite3.Row, heute: str) -> bool:
     if not frist:
         return False
 
-    # Das Datum aus jeder Schreibweise auf ISO bringen, sonst stimmt der
-    # Vergleich nicht. Was nicht lesbar ist, gilt nicht als überfaellig.
+    # Beide Seiten durch denselben Parser. Was nicht lesbar ist, gilt
+    # nicht als überfaellig — lieber zuwenig melden als einen Kunden
+    # mahnen, dem nichts zu zahlen fällig ist.
     from faktur import betraege
 
     gefunden = betraege.lies_datum(frist)
-    if gefunden is None:
+    wann = betraege.lies_datum(heute)
+    if gefunden is None or wann is None:
         return False
 
-    return gefunden.isoformat() < heute
+    return gefunden < wann
 
 
 def offene(db: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -151,3 +162,27 @@ def als_bezahlt_markieren(db: sqlite3.Connection, dokument_id: int, wann: str) -
     )
     db.commit()
     return True
+
+
+def summe_ueberfaellig(db: sqlite3.Connection) -> float:
+    """Rechnet die überfälligen Forderungen zusammen.
+
+    :func:`summe_offen` zählt *jede* offene Rechnung. Diese zählt nur die,
+    deren Frist abgelaufen ist — und das ist eine andere Zahl mit einer
+    anderen Bedeutung. Auf der Übersicht stehen beide nebeneinander, weil
+    eine davon sagt, was da ist, und die andere, was dringend ist.
+
+    Args:
+        db: Die Datenbankverbindung.
+
+    Returns:
+        Die Summe der überfälligen Rechnungen.
+    """
+    from faktur import betraege, dateien
+
+    heute = betraege.heute()
+    return sum(
+        dateien.summe_von(db, int(dokument["id"]))
+        for dokument in offene(db)
+        if ist_faellig(dokument, heute)
+    )

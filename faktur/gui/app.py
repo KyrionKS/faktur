@@ -61,6 +61,34 @@ _STYLE = """
     border-radius: 8px;
 }
 
+/* Die drei Kacheln auf der Uebersicht.
+
+   Wie der Hinweis ein Kasten, nur mit einer Zahl darin. Die Zahl steht
+   linksbuendig wie eine Ueberschrift, nicht rechtsbuendig wie in einem
+   Buchhaltungsprogramm — dort erwartet man Nachkommastellen mit
+   Tabellenspalten, und das ist hier der falsche Ton. */
+#kachel {
+    background: palette(base);
+    border: 1px solid palette(mid);
+    border-radius: 8px;
+}
+
+#zahl {
+    font-size: 22px;
+    font-weight: 600;
+}
+
+/* Die kleine Taste unter der Zahl. Sie soll nicht nach der Hauptaktion
+   aussehen — die Hauptaktion ist eine Zahl, die man liest, und nicht
+   eine, die man anklickt. */
+#kachel_taste {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: palette(dark);
+    text-align: left;
+}
+
 /* Die eine Taste, um die es geht. Nur fett — eine eigene Farbe sähe
    auf dem Mac aus wie ein Fremdkörper. */
 #haupt {

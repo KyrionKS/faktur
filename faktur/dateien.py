@@ -6,8 +6,10 @@ kennt diese Functionsnamen nicht, sie fragt nur danach.
 
 from __future__ import annotations
 
+import datetime
 import sqlite3
 from collections.abc import Sequence
+from typing import NamedTuple
 
 from faktur import betraege
 from faktur.db import nummer_aus
@@ -771,3 +773,143 @@ def projekt_belege(db: sqlite3.Connection, projekt: sqlite3.Row) -> list[sqlite3
             (kunde_id, projekt["nummer"]),
         )
     )
+
+
+# ------------------------------------------------------------- Auswertung
+
+
+def _rechnungssummen(db: sqlite3.Connection) -> list[tuple[datetime.date, float]]:
+    """Gibt zu jeder Rechnung ihr Datum und ihre Summe zurück.
+
+    **Gelesen, nicht geschnitten.** Auf der Platte steht das Datum als
+    ``TT.MM.JJJJ``, aber nicht nur: Bilder und ältere Fassungen haben
+    ISO-Daten hineingeschrieben. Ein ``substr(datum, 1, 7)`` im SQL
+    zählt beides falsch — und zählt es *unterschiedlich* falsch, was
+    noch schlimmer ist. Hier wird jedes Datum einmal gelesen.
+
+    Args:
+        db: Die Datenbankverbindung.
+
+    Returns:
+        Je Rechnung das Datum und die Summe. Ohne Positionen steht eine
+        Rechnung mit 0,00 € drin — sie ist ja da.
+    """
+    gefunden: list[tuple[datetime.date, float]] = []
+
+    for zeile in db.execute(
+        """
+        SELECT d.datum AS datum,
+               COALESCE(SUM(p.menge * p.preis), 0) AS summe
+        FROM dokumente AS d
+        LEFT JOIN positionen AS p ON p.dokument_id = d.id
+        WHERE d.art = 'rechnung'
+        GROUP BY d.id
+        """
+    ):
+        gelesen = betraege.lies_datum(zeile["datum"])
+        if gelesen is None:
+            continue
+        gefunden.append((gelesen, float(zeile["summe"])))
+
+    return gefunden
+
+
+class Monatssumme(NamedTuple):
+    """Ein Monat auf der Uebersicht.
+
+    Attributes:
+        monat: Die Beschriftung, etwa ``10.26``.
+        anzahl: Wie viele Rechnungen in dem Monat ausgestellt wurden.
+        summe: Ihre Summe zusammen.
+    """
+
+    monat: str
+    anzahl: int
+    summe: float
+
+
+def monatssummen(db: sqlite3.Connection, anzahl: int = 12) -> list[Monatssumme]:
+    """Rechnet die Rechnungssummen je Monat aus, die letzten ``anzahl``.
+
+    **Nach dem Rechnungsdatum, nicht dem Zahlungsdatum.** Gefragt ist,
+    was in einem Monat in Rechnung gestellt wurde. Wer wissen will, was
+    auch wirklich hereingekommen ist, findet das auf der Seite *Offene
+    Forderungen* — dort steht jede Rechnung mit ihrem Zahlungsdatum.
+
+    Args:
+        db: Die Datenbankverbindung.
+        anzahl: Wie viele Monate zurück. 12 sind ein Jahr.
+
+    Returns:
+        Je Monat eine Beschriftung, die Zahl der Rechnungen und die
+        Summe. Der älteste zuerst, damit man von links nach rechts liest.
+    """
+    heute = betraege.lies_datum(betraege.heute())
+    if heute is None:
+        return []
+
+    # Die gewollten Monate als (Jahr, Monat), der älteste zuerst.
+    erster = heute.year * 12 + heute.month - 1 - (anzahl - 1)
+    monate = [
+        (gesamt // 12, gesamt % 12 + 1) for gesamt in range(erster, erster + anzahl)
+    ]
+
+    summen: dict[tuple[int, int], float] = dict.fromkeys(monate, 0.0)
+    gezahlt: dict[tuple[int, int], int] = dict.fromkeys(monate, 0)
+    for tag, summe in _rechnungssummen(db):
+        if (tag.year, tag.month) in summen:
+            summen[(tag.year, tag.month)] += summe
+            gezahlt[(tag.year, tag.month)] += 1
+
+    return [
+        Monatssumme(
+            f"{monat:02d}.{str(jahr)[2:]}",
+            gezahlt[(jahr, monat)],
+            summen[(jahr, monat)],
+        )
+        for jahr, monat in monate
+    ]
+
+
+def jahreszahlen(db: sqlite3.Connection, jahr: int | None = None) -> tuple[int, float]:
+    """Sagt, was dieses Jahr in Rechnung gestellt wurde.
+
+    **Zahl und Summe zusammen.** Beide stehen auf der Übersicht unter
+    derselben Zahl, und sie kommen aus derselben Rechnung. Zwei
+    Funktionen — eine fuer die Zahl, eine fuer die Summe — wuerden zwei
+    Stellen sein, an denen die Jahre auseinanderlaufen koennen.
+
+    Args:
+        db: Die Datenbankverbindung.
+        jahr: Das Jahr. Ohne Angabe das laufende.
+
+    Returns:
+        Wie viele Rechnungen es waren und was sie zusammen machen.
+        Bezahlt oder nicht — gezahlt wird nicht verbucht, sondern
+        abgebucht, und das steht bei den offenen Forderungen.
+    """
+    heute = betraege.lies_datum(betraege.heute())
+    gesucht = jahr if jahr is not None else (heute.year if heute else 0)
+
+    zeilen = [
+        (tag, summe) for tag, summe in _rechnungssummen(db) if tag.year == gesucht
+    ]
+    return len(zeilen), sum(summe for _tag, summe in zeilen)
+
+
+def offene_angebote(db: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Gibt die Projekte zurück, die noch nicht abgerechnet sind.
+
+    **Ein Angebot ist kein Geld.** Es steht hier, weil man wissen will,
+    was dem Kunden angeboten wurde und noch keine Rechnung daraus kam —
+    nicht, weil es eine Forderung wäre. Das ist der Unterschied zu
+    :func:`faktur.offen.offene`, und die beiden werden leicht
+    verwechselt.
+
+    Args:
+        db: Die Datenbankverbindung.
+
+    Returns:
+        Die Projekte ohne Rechnung.
+    """
+    return [p for p in projekte(db) if not float(p["rechnungen"] or 0)]
