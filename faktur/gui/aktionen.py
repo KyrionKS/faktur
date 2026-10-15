@@ -77,6 +77,24 @@ class Bearbeitbar:
         seite.knopf("Löschen", self.loeschen, "⌫")
         seite.knopf("Stilllegen", self.stilllegen)
 
+        # Doppelklick macht dasselbe wie *Ändern*. Das ist der Weg, den
+        # man in Mail, Notizen und überall sonst erwartet, und man muss
+        # ihn nicht suchen. Also geht er nicht nur über die Taste.
+        seite.ansicht.doubleClicked.connect(self._doppelt)
+
+    def _doppelt(self, index: object) -> None:
+        """Öffnet das Blatt bei einem Doppelklick.
+
+        Args:
+            index: Die Zeile, auf die geklickt wurde. Geprüft wird sie,
+                denn ein Doppelklick neben der Liste trifft keine Zeile.
+
+        Returns:
+            Nichts.
+        """
+        if index is not None and index.isValid():
+            self.aendern()
+
     # ------------------------------------------------------------------ neu
 
     def neu(self) -> None:

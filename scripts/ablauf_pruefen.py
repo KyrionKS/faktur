@@ -483,6 +483,68 @@ def _formular_pruefen(
             protokoll.ok("Loeschen ohne Markierung tut nichts")
         else:
             protokoll.schlecht("Loeschen", "hat ohne Markierung geloescht")
+        # 4b. Doppelklick. Er muss dasselbe tun wie *Aendern* — auch und
+        #     gerade nach dem Sortieren, wo sich die Reihenfolge bewegt hat.
+        geoeffnet: list[dict[str, str]] = []
+
+        def merke_doppelklick(
+            self: object,
+            db: object,
+            titel: str,
+            felder: object,
+            daten: dict,
+            *a: object,
+        ) -> None:
+            """Schreibt die Werte mit, die in das Blatt kommen.
+
+            Args:
+                self: Das Blatt.
+                db: Die Datenbankverbindung.
+                titel: Der Titel.
+                felder: Die Felder.
+                daten: Die Werte des gewaehlten Kunden.
+                a: Der Rest.
+
+            Returns:
+                Nichts.
+            """
+            geoeffnet.append(dict(daten))
+
+        Formular.__init__ = merke_doppelklick  # type: ignore[method-assign]
+
+        for richtung, wohin in ((True, "auf"), (False, "ab")):
+            seite.modell.sortiere(0, richtung)
+            _waehle(seite, 0, "Bildberichtung AG")
+            erwartet = seite.gewaehlt()["firma"]
+            geoeffnet.clear()
+            zeile = seite.ansicht.currentIndex().row()
+            seite.ansicht.doubleClicked.emit(seite.modell.index(zeile, 0))
+            app.processEvents()
+
+            if not geoeffnet:
+                protokoll.schlecht(
+                    "Doppelklick", f"hat nach dem Sortieren {wohin} nichts geoeffnet"
+                )
+            elif geoeffnet[0]["firma"] != erwartet:
+                protokoll.schlecht(
+                    "Doppelklick",
+                    f"sieht „{erwartet}“, geoeffnet wurde „{geoeffnet[0]['firma']}“",
+                )
+            else:
+                protokoll.ok(f"Doppelklick trifft den markierten Kunden ({wohin})")
+
+        # Neben die Liste geklickt: darf nichts aufmachen.
+        geoeffnet.clear()
+        seite.ansicht.doubleClicked.emit(seite.modell.index(-1, -1))
+        app.processEvents()
+        if geoeffnet:
+            protokoll.schlecht("Doppelklick", "daneben hat etwas aufgegangen")
+        else:
+            protokoll.ok("Doppelklick neben der Liste tut nichts")
+
+        seite.ansicht.doubleClicked.connect(seite.aktionen._doppelt)
+        del merke_doppelklick
+
         # 5. Ein Kunde mit Belegen wird nicht geloescht.
         ruhiger = [
             k for k in dateien.kunden(fenster.db) if k["firma"] == "Soundcheck GmbH"

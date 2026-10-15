@@ -569,3 +569,182 @@ def test_und_alle_felder_bleiben_vorhanden() -> None:
         erwartet = [feld.schluessel for feld in felder]
 
         assert alle == erwartet, f"Felder verschoben: {alle} statt {erwartet}"
+
+
+# ------------------------------------------------------------- Doppelklick
+
+
+def _hoert_aufs_blatt(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Lässt jeden Blattaufruf durchgehen und merkt sich den Titel.
+
+    Args:
+        monkeypatch: Zum Ersetzen von ``Formular.__init__``.
+
+    Returns:
+        Die Liste der Titel, in der Reihenfolge des Aufrufs.
+    """
+    from faktur.gui.formular import Formular
+
+    titel: list[str] = []
+    monkeypatch.setattr(
+        Formular,
+        "__init__",
+        lambda self, db, fenstertitel, *a, **k: titel.append(fenstertitel),
+    )
+    monkeypatch.setattr(Formular, "exec", lambda self: Formular.DialogCode.Rejected)
+    return titel
+
+
+def test_doppelklick_oeffnet_das_blatt(
+    fenster: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Doppelklick auf einen Kunden macht dasselbe wie *Ändern*.
+
+    Das ist der Weg, den man in jedem anderen Programm erwartet. Er darf
+    nicht erst gesucht werden müssen.
+
+    **Das Signal wird geschickt, nicht geklickt.** ``QTest.mouseDClick``
+    erzeugt ohne Bildschirm keinen Doppelklick — gemessen, nicht vermutet:
+    die Ansicht bekommt das Ereignis nicht zu sehen. Der Slot und seine
+    Verdrahtung sind das, was hier zu prüfen ist; die Mauseingabe muss man
+    am Bildschirm prüfen, und dafür ist die Bedienung da.
+
+    Args:
+        fenster: Das Fenster.
+        monkeypatch: Zum Aufzeichnen des Blattes.
+    """
+    verbindung = fenster.db  # type: ignore[attr-defined]
+    dateien.kunde_speichern(verbindung, {"firma": "Zeta Tonwerk"})
+    dateien.kunde_speichern(verbindung, {"firma": "Alpha Klangstudio"})
+
+    seite = _kunden(fenster)
+    titel = _hoert_aufs_blatt(monkeypatch)
+
+    _waehle(seite, 0, "Zeta Tonwerk")
+    seite.ansicht.doubleClicked.emit(
+        seite.modell.index(seite.ansicht.currentIndex().row(), 0)
+    )
+
+    assert titel == ["Kunde ändern"], f"Der Doppelklick öffnete {titel}"
+
+
+def test_und_derselbe_doppelklick_nimmt_den_markierten_kunden(
+    fenster: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach dem Sortieren meint der Doppelklick den, den man sieht.
+
+    Das ist der ganze Sinn der Regel, dass Datensatz und Zeile zusammen im
+    Modell liegen: Nach dem Sortieren muss der Doppelklick den **sichtbaren**
+    Kunden treffen, nicht den, der vorher an dieser Stelle stand.
+
+    Args:
+        fenster: Das Fenster.
+        monkeypatch: Zum Aufzeichnen, welches Blatt aufgeht.
+    """
+    verbindung = fenster.db  # type: ignore[attr-defined]
+    dateien.kunde_speichern(verbindung, {"firma": "Zeta Tonwerk"})
+    dateien.kunde_speichern(verbindung, {"firma": "Alpha Klangstudio"})
+
+    seite = _kunden(fenster)
+
+    from faktur.gui.formular import Formular
+
+    geoeffnet: list[dict[str, str]] = []
+
+    def tu_init(
+        self: object, db: object, titel: str, felder: object, daten: dict, *a: object
+    ) -> None:
+        """Merkt sich, welche Werte in das Blatt kommen.
+
+        Args:
+            self: Das Blatt.
+            db: Die Datenbankverbindung.
+            titel: Der Titel.
+            felder: Die Felder.
+            daten: Die Werte des gewaehlten Kunden.
+            a: Der Rest.
+
+        Returns:
+            Nichts.
+        """
+        geoeffnet.append(dict(daten))
+
+    monkeypatch.setattr(Formular, "__init__", tu_init)
+    monkeypatch.setattr(Formular, "exec", lambda self: Formular.DialogCode.Rejected)
+
+    seite.modell.sortiere(0, False)
+    _waehle(seite, 0, "Zeta Tonwerk")
+    erwartet = seite.gewaehlt()["firma"]
+
+    zeile = seite.ansicht.currentIndex().row()
+    seite.ansicht.doubleClicked.emit(seite.modell.index(zeile, 0))
+
+    assert geoeffnet, "Der Doppelklick hat nichts geoeffnet"
+    assert geoeffnet[0]["firma"] == erwartet, (
+        f"Der Doppelklick hat „{geoeffnet[0]['firma']}“ geoeffnet, "
+        f"markiert war „{erwartet}“."
+    )
+
+
+def test_und_ein_doppelklick_neben_die_liste_oeffnet_nichts(
+    fenster: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Doppelklick auf den leeren Raum daneben macht nichts.
+
+    Args:
+        fenster: Das Fenster.
+        monkeypatch: Zum Aufzeichnen des Blattes.
+    """
+    verbindung = fenster.db  # type: ignore[attr-defined]
+    dateien.kunde_speichern(verbindung, {"firma": "Zeta Tonwerk"})
+
+    seite = _kunden(fenster)
+    titel = _hoert_aufs_blatt(monkeypatch)
+
+    # Ein Doppelklick neben der Liste trifft keine Zeile — und lässt die
+    # Markierung trotzdem stehen, weil die sich nicht aufgehoben hat.
+    seite.ansicht.doubleClicked.emit(seite.modell.index(-1, -1))
+
+    assert titel == [], f"Der Doppelklick öffnete {titel}"
+
+
+def test_und_ohne_markierung_oeffnet_der_doppelklick_auch_nichts(
+    fenster: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Doppelklick ohne Auswahl hat keinen Kunden im Sinn.
+
+    Args:
+        fenster: Das Fenster.
+        monkeypatch: Zum Aufzeichnen des Blattes.
+    """
+    verbindung = fenster.db  # type: ignore[attr-defined]
+    dateien.kunde_speichern(verbindung, {"firma": "Zeta Tonwerk"})
+
+    seite = _kunden(fenster)
+    titel = _hoert_aufs_blatt(monkeypatch)
+
+    seite.ansicht.clearSelection()
+    seite.ansicht.setCurrentIndex(seite.modell.index(-1, -1))
+    seite.ansicht.doubleClicked.emit(seite.modell.index(0, 0))
+
+    assert titel == [], f"Der Doppelklick öffnete {titel}"
+
+
+def test_das_gilt_auch_fuer_die_leistungen(
+    fenster: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Leistung laesst sich genauso oeffnen wie ein Kunde.
+
+    Args:
+        fenster: Das Fenster.
+        monkeypatch: Zum Aufzeichnen des Blattes.
+    """
+    fenster.gehe("leistungen")  # type: ignore[attr-defined]
+    seite = fenster.seite()  # type: ignore[attr-defined]
+    titel = _hoert_aufs_blatt(monkeypatch)
+
+    _waehle(seite, 0, "Aufnahme Ton")
+    zeile = seite.ansicht.currentIndex().row()
+    seite.ansicht.doubleClicked.emit(seite.modell.index(zeile, 0))
+
+    assert titel == ["Leistung ändern"], f"Der Doppelklick öffnete {titel}"
