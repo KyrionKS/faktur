@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from faktur import __version__, orte
+from faktur import __version__
 from faktur.gui.listen import (
     DokumenteSeite,
     KundenSeite,
@@ -44,6 +44,8 @@ from faktur.gui.qt import (
     QWidget,
 )
 from faktur.gui.seite import Seite
+from faktur.gui.stammdaten import StammdatenSeite
+from faktur.gui.uebersicht import UebersichtSeite
 
 #: Die Bereiche der Seitenleiste in der Reihenfolge, in der sie stehen.
 #:
@@ -55,6 +57,7 @@ BEREICHE: tuple[tuple[str, str, str], ...] = (
     ("offen", "Offene Forderungen", "Ctrl+4"),
     ("kunden", "Kunden", "Ctrl+5"),
     ("leistungen", "Leistungen", "Ctrl+6"),
+    ("stammdaten", "Stammdaten", "Ctrl+7"),
 )
 
 
@@ -115,17 +118,23 @@ class Fenster:
         rahmen_anordnung.addWidget(self.leiste)
 
         self.seiten: dict[str, Seite] = {
-            "uebersicht": _kommt_noch(verbindung, "Übersicht"),
-            "projekte": _kommt_noch(verbindung, "Projekte"),
+            "uebersicht": UebersichtSeite(verbindung),
+            "projekte": ProjekteSeite(verbindung),
             "dokumente": self._dokumentseite(verbindung),
             "offen": OffeneSeite(verbindung),
             "kunden": KundenSeite(verbindung),
             "leistungen": LeistungenSeite(verbindung),
+            "stammdaten": StammdatenSeite(verbindung),
         }
 
         self.buehne = QStackedWidget()
         for schluessel in self.reihenfolge:
-            self.buehne.addWidget(self.seiten[schluessel])
+            seite = self.seiten[schluessel]
+            # Jede Seite kennt das Fenster, in dem sie steckt. Sonst
+            # findet sie es nicht — es ist keine QObject, also kein
+            # Elternteil, das man ablaufen koennte.
+            seite.fenster = self  # type: ignore[attr-defined]
+            self.buehne.addWidget(seite)
 
         self.trenner = QSplitter(Qt.Orientation.Horizontal)
         self.trenner.setObjectName("trenner")
@@ -294,10 +303,6 @@ class Fenster:
 
         datei.addSeparator()
 
-        ordner = QAction("Dokumentenordner öffnen", self.fenster)
-        ordner.triggered.connect(self._ordner)
-        datei.addAction(ordner)
-
     def _menue_ansicht(self, leiste: QMenuBar) -> None:
         """Baut das Menü *Ansicht*.
 
@@ -341,7 +346,7 @@ class Fenster:
         einstellungen = QAction("Einstellungen…", self.fenster)
         einstellungen.setShortcut("Ctrl+,")
         einstellungen.setMenuRole(QAction.MenuRole.PreferencesRole)
-        einstellungen.triggered.connect(self._einstellungen_geoeffnet)
+        einstellungen.triggered.connect(lambda: self.gehe("stammdaten"))
         faktur.addAction(einstellungen)
 
         ueber = QAction(f"Über Faktur {__version__}", self.fenster)
@@ -538,30 +543,6 @@ class Fenster:
             feld.setFocus()
             feld.selectAll()
 
-    def _ordner(self) -> None:
-        """Zeigt den Ordner, in dem die PDF liegen.
-
-        Returns:
-            Nichts.
-        """
-        QMessageBox.information(
-            self.fenster,
-            "Dokumentenordner",
-            f"Die PDF liegen hier:\n\n{orte.dokumente()}",
-        )
-
-    def _einstellungen_geoeffnet(self) -> None:
-        """Öffnet die Einstellungen.
-
-        Returns:
-            Nichts.
-        """
-        from faktur.gui.stammdaten import StammdatenDialog
-
-        dialog = StammdatenDialog(self.db, self.fenster)
-        dialog.exec()
-        self.neu_laden()
-
     def _ueber_gezeigt(self) -> None:
         """Zeigt den Übernachweis.
 
@@ -576,26 +557,20 @@ class Fenster:
         )
 
 
-def _kommt_noch(db: sqlite3.Connection, titel: str) -> Seite:
-    """Baut eine Seite, die noch keinen Inhalt hat.
-
-    Übersicht und Projekte kommen in einem späteren Schritt. Bis dahin steht
-    ihr Titel, damit die Seitenleiste von Anfang an vollständig ist und man
-    sieht, wohin das Programm sich bewegt.
-
-    Args:
-        db: Die Datenbankverbindung.
-        titel: Der Titel der Seite.
-
-    Returns:
-        Die Seite.
-    """
-    seite = Seite(db, titel)
-    hinweis = QLabel(f"{titel} kommt als Nächstes.")
-    hinweis.setObjectName("zweit")
-    seite._koerper.addWidget(hinweis, 1)
-    seite.ohne_suche()
-    return seite
-
-
 __all__ = ["BEREICHE", "Fenster"]
+
+
+class ProjekteSeite(Seite):
+    """Eine Zeile je Projektnummer. Kommt im naechsten Schritt."""
+
+    def __init__(self, db: sqlite3.Connection) -> None:
+        """Baut die Seite auf.
+
+        Args:
+            db: Die Datenbankverbindung.
+        """
+        super().__init__(db, "Projekte")
+        self.ohne_suche()
+        hinweis = QLabel("Projekte kommen als Nächstes.")
+        hinweis.setObjectName("zweit")
+        self._koerper.addWidget(hinweis, 1)

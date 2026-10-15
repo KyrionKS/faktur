@@ -91,7 +91,7 @@ def test_ein_angebot_bauen_und_speichern(
     fenster.positionen.aus_leistung(leistung)
     fenster.positionen.aus_leistung(leistung)
 
-    assert fenster.speichern(mit_pdf=False) is True
+    assert fenster.speichern() is True
 
     dokumente = dateien.dokumente(verbindung)
     assert len(dokumente) == 1
@@ -122,7 +122,7 @@ def test_und_die_summe_steht_gross_und_richtig_darunter(
         f"erwartet wird {betraege.euro(erwartet)}."
     )
 
-    fenster.speichern(mit_pdf=False)
+    fenster.speichern()
     kennung = dateien.dokumente(verbindung)[0]["id"]
     assert dateien.summe_von(verbindung, kennung) == pytest.approx(erwartet)
 
@@ -148,7 +148,7 @@ def test_und_was_man_sieht_ist_auch_das_was_gespeichert_wird(
         fenster.positionen.data(fenster.positionen.index(zeile, 0), 0)
         for zeile in range(fenster.ansicht.model().rowCount())
     ]
-    fenster.speichern(mit_pdf=False)
+    fenster.speichern()
 
     kennung = dateien.dokumente(verbindung)[0]["id"]
     gespeichert = [
@@ -176,7 +176,7 @@ def test_ohne_kunde_wird_nicht_gespeichert(
     fenster = EditorFenster(verbindung)
     fenster.positionen.aus_leistung(dateien.leistungen(verbindung)[0])
 
-    assert fenster.speichern(mit_pdf=False) is False
+    assert fenster.speichern() is False
     assert dateien.dokumente(verbindung) == []
 
 
@@ -192,7 +192,7 @@ def test_und_ohne_positionen_auch_nicht(
     fenster = EditorFenster(verbindung)
     _waehle_kunde(fenster)
 
-    assert fenster.speichern(mit_pdf=False) is False
+    assert fenster.speichern() is False
     assert dateien.dokumente(verbindung) == []
 
 
@@ -210,7 +210,7 @@ def test_und_ohne_nummer_auch_nicht(
     fenster.positionen.aus_leistung(dateien.leistungen(verbindung)[0])
     fenster.nummer.setText("")
 
-    assert fenster.speichern(mit_pdf=False) is False
+    assert fenster.speichern() is False
 
 
 def test_und_ein_unlesbares_datum_auch_nicht(
@@ -227,7 +227,7 @@ def test_und_ein_unlesbares_datum_auch_nicht(
     fenster.positionen.aus_leistung(dateien.leistungen(verbindung)[0])
     fenster.datum.setText("gestern")
 
-    assert fenster.speichern(mit_pdf=False) is False
+    assert fenster.speichern() is False
     assert dateien.dokumente(verbindung) == []
 
 
@@ -306,7 +306,7 @@ def test_aus_einem_angebot_wird_eine_rechnung_mit_gleicher_nummer(
     _waehle_kunde(fenster)
     leistung = dateien.leistungen(verbindung)[0]
     fenster.positionen.aus_leistung(leistung)
-    fenster.speichern(mit_pdf=False)
+    fenster.speichern()
 
     angebot = dateien.dokumente(verbindung)[0]
 
@@ -317,7 +317,7 @@ def test_aus_einem_angebot_wird_eine_rechnung_mit_gleicher_nummer(
     )
     assert fenster.positionen.rowCount() == 1
 
-    fenster.speichern(mit_pdf=False)
+    fenster.speichern()
     rechnungen = [d for d in dateien.dokumente(verbindung) if d["art"] == "rechnung"]
     assert len(rechnungen) == 1
     assert rechnungen[0]["nummer"] == angebot["nummer"]
@@ -337,7 +337,7 @@ def test_und_die_positionen_wandern_mit(
     leistung = dateien.leistungen(verbindung)[0]
     fenster.positionen.aus_leistung(leistung)
     fenster.positionen.aus_leistung(leistung)
-    fenster.speichern(mit_pdf=False)
+    fenster.speichern()
     angebot = dateien.dokumente(verbindung)[0]
 
     fenster = EditorFenster(verbindung, angebots_id=angebot["id"])
@@ -349,83 +349,226 @@ def test_und_die_positionen_wandern_mit(
         )
 
 
-def test_speichern_und_pdf(
-    app: object,
+# ----------------------------------------------------------- Die PDF erzeugen
+
+
+def _bereit(
     verbindung: sqlite3.Connection,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Speichern mit PDF schreibt beides.
+) -> EditorFenster:
+    """Baut ein Dokumentfenster, das gespeichert werden kann.
 
     Args:
-        app: Die Qt-Anwendung.
         verbindung: Die Datenbankverbindung.
-        tmp_path: Das Verzeichnis fuer die PDF.
-        monkeypatch: Zum Umleiten des Ausgabeordners.
-    """
-    ordner = tmp_path / "pdf"
-    monkeypatch.setattr(db, "ausgabeordner", lambda: ordner)
-    monkeypatch.setattr(db, "DOKUMENTE", ordner, raising=False)
 
+    Returns:
+        Das Fenster.
+    """
     fenster = EditorFenster(verbindung)
     _waehle_kunde(fenster)
     fenster.positionen.aus_leistung(dateien.leistungen(verbindung)[0])
-
-    from faktur.gui.qt import QMessageBox
-
-    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
-    monkeypatch.setattr(QMessageBox, "critical", staticmethod(lambda *a, **k: None))
-
-    assert fenster.speichern(mit_pdf=True) is True
-
-    geschrieben = sorted(ordner.glob("*.pdf"))
-    assert len(geschrieben) == 1, f"Es liegen {len(geschrieben)} PDF im Ordner"
-    assert geschrieben[0].stat().st_size > 1000, "Die PDF ist verdächtig klein"
-    assert geschrieben[0].name.startswith("ANG - ")
+    return fenster
 
 
-def test_und_vor_dem_ueberschreiben_wird_gefragt(
+def _zeige_auf(
+    monkeypatch: pytest.MonkeyPatch, ordner: Path, antwort: str = ""
+) -> list[str]:
+    """Lässt den Speichern-Dialog auf einen Ordner zeigen.
+
+    Args:
+        monkeypatch: Zum Ersetzen des Dialogs.
+        ordner: Wohin der Dialog zeigen soll.
+        antwort: Der Dateiname, den der Dialog zurückgibt. Leer heißt
+            *Abgebrochen*.
+
+    Returns:
+        Die Liste der angebotenen Startpfade.
+    """
+    from faktur.gui.qt import QFileDialog
+
+    gesehen: list[str] = []
+
+    def tu_get(
+        eltern: object, titel: str, vorschlag: str, gefilter: str
+    ) -> tuple[str, str]:
+        """Tut so, als haette jemand einen Ordner gewaehlt.
+
+        Args:
+            eltern: Das Fenster.
+            titel: Der Titel des Dialogs.
+            vorschlag: Der Pfad, den der Dialog vorschlaegt.
+            gefilter: Der Dateifilter.
+
+        Returns:
+            Der gewaehlte Pfad und der Filter.
+        """
+        gesehen.append(vorschlag)
+        if not antwort:
+            return "", ""
+        # In den gewaehlten Ordner, nicht an den vom Programm vorgeschlagenen.
+        # Sonst landet jede PDF im echten Datenordner des Benutzers — was
+        # beim ersten Versuch dieses Tests tatsaechlich passiert ist.
+        return str(ordner / antwort), gefilter
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(tu_get))
+    return gesehen
+
+
+def test_die_pdf_lands_dort_wo_ich_sage(
     app: object,
     verbindung: sqlite3.Connection,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Liegt die PDF schon da, geht sie nicht ohne Frage weg.
+    """Der Dialog bestimmt den Ort, nicht das Programm.
 
     Args:
         app: Die Qt-Anwendung.
         verbindung: Die Datenbankverbindung.
         tmp_path: Das Verzeichnis fuer die PDF.
-        monkeypatch: Zum Umleiten und Antworten.
+        monkeypatch: Zum Ersetzen des Dialogs.
+    """
+    ordner = tmp_path / "wo auch immer"
+    ordner.mkdir()
+    fenster = _bereit(verbindung)
+    _zeige_auf(monkeypatch, ordner, "meine Rechnung.pdf")
+
+    assert fenster.pdf_erzeugen() is True
+
+    geschrieben = ordner / "meine Rechnung.pdf"
+    assert geschrieben.is_file(), "Die PDF liegt nicht dort, wo gewaehlt wurde"
+    assert geschrieben.stat().st_size > 1000, "Die PDF ist verdächtig klein"
+
+
+def test_und_der_name_ist_vorgefuellt(
+    app: object,
+    verbindung: sqlite3.Connection,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Im Dialog steht schon der richtige Name drin.
+
+    Args:
+        app: Die Qt-Anwendung.
+        verbindung: Die Datenbankverbindung.
+        tmp_path: Das Verzeichnis fuer den Dialog.
+        monkeypatch: Zum Ersetzen des Dialogs.
+    """
+    fenster = _bereit(verbindung)
+    gesehen = _zeige_auf(monkeypatch, tmp_path, "x.pdf")
+
+    fenster.pdf_erzeugen()
+
+    assert gesehen, "Der Dialog wurde nie gezeigt"
+    name = Path(gesehen[0]).name
+    assert name.startswith("ANG - "), f"Der Name ist „{name}“"
+    assert "Tonstudio Nordwind" in name
+    assert name.endswith(".pdf")
+
+
+def test_und_beim_abbrechen_bleibt_die_alte_stehen(
+    app: object,
+    verbindung: sqlite3.Connection,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wer abbricht, ueberschreibt nichts — der Beleg ist trotzdem gespeichert.
+
+    Das ist der ganze Grund fuer die Frage: Es geht nicht darum, dass
+    Faktur die Datei findet, sondern darum, dass niemand sie ungefragt
+    verliert. Und der Beleg ist zu dem Zeitpunkt schon gespeichert —
+    abbruchen heisst nur: keine PDF.
+
+    Args:
+        app: Die Qt-Anwendung.
+        verbindung: Die Datenbankverbindung.
+        tmp_path: Das Verzeichnis fuer die PDF.
+        monkeypatch: Zum Ersetzen des Dialogs.
     """
     ordner = tmp_path / "pdf"
     ordner.mkdir()
-    monkeypatch.setattr(db, "ausgabeordner", lambda: ordner)
-    monkeypatch.setattr(db, "DOKUMENTE", ordner, raising=False)
+    alt = ordner / "ANG - 0001 - Tonstudio Nordwind.pdf"
+    alt.write_bytes(b"die alte")
 
-    fenster = EditorFenster(verbindung)
-    _waehle_kunde(fenster)
-    fenster.positionen.aus_leistung(dateien.leistungen(verbindung)[0])
-    fenster.speichern(mit_pdf=False)
+    fenster = _bereit(verbindung)
+    _zeige_auf(monkeypatch, ordner)  # kein Name: abgebrochen
 
-    dokument = dateien.dokumente(verbindung)[0]
-    ziel = ordner / f"{dateien.dateiname(dokument, 'angebot')}.pdf"
-    ziel.write_bytes(b"die alte")
-
-    from faktur.gui.qt import QMessageBox
-
-    gefragt: list[str] = []
-    monkeypatch.setattr(
-        QMessageBox,
-        "question",
-        staticmethod(
-            lambda *a, **k: (
-                gefragt.append(" ".join(str(x) for x in a)),
-                QMessageBox.StandardButton.Cancel,
-            )[1]
-        ),
+    assert fenster.pdf_erzeugen() is False
+    assert alt.read_bytes() == b"die alte", "Die alte PDF wurde angefasst"
+    assert not list(ordner.glob("x.pdf"))
+    assert len(dateien.dokumente(verbindung)) == 1, (
+        "Der Beleg wurde nicht gespeichert — abgebrochen heisst nur: keine PDF."
     )
 
-    assert fenster.speichern(mit_pdf=True) is False
-    assert gefragt, "Es wurde nicht gefragt"
-    assert ziel.read_bytes() == b"die alte", "Die alte PDF wurde ueberschrieben"
+
+def test_und_bei_einem_unvollstaendigen_beleg_fragt_gar_nicht(
+    app: object,
+    verbindung: sqlite3.Connection,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Erst wird gespeichert. Passt es nicht, kommt kein Ordnerfenster.
+
+    Args:
+        app: Die Qt-Anwendung.
+        verbindung: Die Datenbankverbindung.
+        tmp_path: Das Verzeichnis fuer den Dialog.
+        monkeypatch: Zum Ersetzen des Dialogs.
+    """
+    fenster = EditorFenster(verbindung)
+    fenster.positionen.aus_leistung(dateien.leistungen(verbindung)[0])
+    gesehen = _zeige_auf(monkeypatch, tmp_path, "x.pdf")
+
+    assert fenster.pdf_erzeugen() is False
+    assert gesehen == [], "Der Dialog wurde trotzdem gezeigt"
+
+
+def test_und_der_letzte_ordner_steht_beim_naechsten_mal_da(
+    app: object,
+    verbindung: sqlite3.Connection,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein zweites Mal fragt nicht wieder von ganz vorn.
+
+    Args:
+        app: Die Qt-Anwendung.
+        verbindung: Die Datenbankverbindung.
+        tmp_path: Das Verzeichnis fuer die PDF.
+        monkeypatch: Zum Ersetzen des Dialogs.
+    """
+    ordner = tmp_path / "Rechnungen 2026"
+    ordner.mkdir()
+
+    fenster = _bereit(verbindung)
+    _zeige_auf(monkeypatch, ordner, "a.pdf")
+    fenster.pdf_erzeugen()
+
+    zweites = _bereit(verbindung)
+    gesehen = _zeige_auf(monkeypatch, ordner, "b.pdf")
+    zweites.pdf_erzeugen()
+
+    assert str(ordner) in gesehen[0], f"Der Dialog nennt „{gesehen[0]}“"
+
+
+def test_und_speichern_allein_fragt_nichts(
+    app: object,
+    verbindung: sqlite3.Connection,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wer nur speichern will, bekommt kein Fenster.
+
+    Args:
+        app: Die Qt-Anwendung.
+        verbindung: Die Datenbankverbindung.
+        tmp_path: Das Verzeichnis, das *nicht* benutzt werden darf.
+        monkeypatch: Zum Aufzeichnen, ob ein Dialog kam.
+    """
+    fenster = _bereit(verbindung)
+    gesehen = _zeige_auf(monkeypatch, tmp_path, "x.pdf")
+
+    assert fenster.speichern() is True
+
+    assert gesehen == [], "Beim Speichern wurde ein Dialog gezeigt"
+    assert not list(tmp_path.glob("*.pdf")), "Es wurde eine PDF geschrieben"
+    assert len(dateien.dokumente(verbindung)) == 1

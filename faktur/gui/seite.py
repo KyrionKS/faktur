@@ -47,6 +47,8 @@ class Seite(QWidget):
         super().__init__()
         self.db = db
         self.titel = titel
+        #: Das Fenster, in dem die Seite steckt. Setzt :class:`Fenster`.
+        self.fenster: object | None = None
 
         self.kopf = QHBoxLayout()
         self.kopf.setContentsMargins(0, 0, 0, 0)
@@ -154,6 +156,46 @@ class Seite(QWidget):
         Returns:
             Nichts.
         """
+
+    # ------------------------------------------------- haefft fuer Aktionen
+
+    def hauptfenster(self) -> object:
+        """Gibt das Fenster zurück, in dem diese Seite steckt.
+
+        **Nicht gesucht, sondern gesagt.** Das Fenster ist kein Elternteil
+        dieser Seite im Qt-Sinne: Es ist eine Hülle um ein QMainWindow,
+        keine QObject. Wer die Elternkette abläuft, findet darum nie etwas
+        — gemessen, nicht vermutet, nach einem Hinweis, der dadurch
+        wirkungslos war.
+
+        Returns:
+            Das Fenster, oder ``None``, wenn die Seite allein steht.
+        """
+        return self.fenster
+
+    def melde(self, text: str) -> None:
+        """Schreibt einen Satz in die Statuszeile des Fensters.
+
+        Args:
+            text: Was geschehen ist.
+
+        Returns:
+            Nichts.
+        """
+        fenster = self.hauptfenster()
+        if fenster is not None:
+            fenster.melde(text)  # type: ignore[attr-defined]
+
+    def unten_add(self, teil: object) -> None:
+        """Setzt etwas unter die Liste.
+
+        Args:
+            teil: Das Widget, etwa einen Haken.
+
+        Returns:
+            Nichts.
+        """
+        self._koerper.addWidget(teil)  # type: ignore[arg-type]
 
 
 class ListenSeite(Seite):
@@ -295,34 +337,6 @@ class ListenSeite(Seite):
             Der Datensatz, oder ``None``, wenn nichts markiert ist.
         """
         return self.modell.datensatz(self.ansicht.currentIndex().row())
-
-    # ------------------------------------------------- haefft fuer Aktionen
-
-    def melde(self, text: str) -> None:
-        """Schreibt einen Satz in die Statuszeile des Fensters.
-
-        Args:
-            text: Was geschehen ist.
-
-        Returns:
-            Nichts.
-        """
-        fenster = self.window()
-        while fenster is not None and not hasattr(fenster, "melde"):
-            fenster = fenster.parent()
-        if fenster is not None:
-            fenster.melde(text)  # type: ignore[attr-defined]
-
-    def unten_add(self, teil: object) -> None:
-        """Setzt etwas unter die Liste.
-
-        Args:
-            teil: Das Widget, etwa einen Haken.
-
-        Returns:
-            Nichts.
-        """
-        self._koerper.addWidget(teil)  # type: ignore[arg-type]
 
     def zeige_auch_archiv_setzen(self, wert: bool) -> None:
         """Schaltet um, ob die stillgelegten Datensätze mitkommen.

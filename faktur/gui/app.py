@@ -51,6 +51,14 @@ _STYLE = """
     color: palette(mid);
 }
 
+/* Der Kasten auf der Übersicht. Nur Systemfarben, damit er auf dem Mac
+   dessen Fensterfarbe nimmt und auf Linux die des Linux-Themas. */
+#hinweis {
+    background: palette(base);
+    border: 1px solid palette(mid);
+    border-radius: 8px;
+}
+
 /* Die eine Taste, um die es geht. Nur fett — eine eigene Farbe sähe
    auf dem Mac aus wie ein Fremdkörper. */
 #haupt {

@@ -24,6 +24,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from faktur import db  # noqa: E402
+from faktur.gui.app import _STYLE  # noqa: E402
 from faktur.gui.fenster import BEREICHE, Fenster  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
@@ -194,6 +195,40 @@ def _editor(verbindung: object) -> Path:
     return ziel
 
 
+def _stammdaten(verbindung: object) -> Path:
+    """Zeichnet die Stammdatenseite.
+
+    Sie ist aus einem Grund in die Seitenleiste gewandert: Als Menuepunkt
+    war sie auf dem Mac nicht zu finden. Wer das nicht sieht, glaubt nicht,
+    dass es sie gibt.
+
+    Args:
+        verbindung: Die Datenbankverbindung.
+
+    Returns:
+        Der Pfad zum Bild.
+    """
+    from faktur.gui.stammdaten import StammdatenSeite
+
+    seite = StammdatenSeite(verbindung)
+    seite.felder["firma"].setText("New Air Media Group")
+    seite.felder["zusatz"].setText("Tonstudio & Medienproduktion")
+    seite.felder["strasse"].setText("Beispielweg 12")
+    seite.felder["plz"].setText("20457")
+    seite.felder["ort"].setText("Hamburg")
+    seite.felder["iban"].setText("DE02 1203 0000 0000 2020 51")
+    seite.felder["steuernummer"].setText("123/456/789")
+
+    seite.show()
+    app = QApplication.instance()
+    if app is not None:
+        app.processEvents()
+    ziel = ZIEL / "09_stammdaten.png"
+    seite.grab().save(str(ziel))
+    seite.close()
+    return ziel
+
+
 def main() -> int:
     """Zeichnet alle Bereiche und sagt, wo die Bilder liegen.
 
@@ -202,6 +237,9 @@ def main() -> int:
     """
     ordner = Path(tempfile.mkdtemp(prefix="faktur_bilder_"))
     app = QApplication.instance() or QApplication(sys.argv)
+    # Ohne das sähen die Bilder anders aus als das Fenster, weil der
+    # Stil sonst nur beim wirklichen Start gesetzt wird.
+    app.setStyleSheet(_STYLE)
 
     verbindung = _datenbank(ordner)
     fenster = Fenster(verbindung)
@@ -220,6 +258,7 @@ def main() -> int:
     fenster.fenster.close()
     geschrieben.append(_formular(verbindung))
     geschrieben.append(_editor(verbindung))
+    geschrieben.append(_stammdaten(verbindung))
     shutil.rmtree(ordner, ignore_errors=True)
 
     print(f"{len(geschrieben)} Bilder in {ZIEL}")  # noqa: T201

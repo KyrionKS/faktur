@@ -87,7 +87,23 @@ def test_und_das_fenster_ist_auch_wirklich_offen(frisch: Path) -> None:
 
     assert sichtbar, "Das Fenster ist offen, aber nicht zu sehen."
     assert breite > 400, f"Das Fenster ist {breite} Pixel breit."
-    assert bereiche == 6, f"Die Seitenleiste hat {bereiche} Bereiche."
+    erwartet = [
+        "Übersicht",
+        "Projekte",
+        "Dokumente",
+        "Offene Forderungen",
+        "Kunden",
+        "Leistungen",
+        "Stammdaten",
+    ]
+    assert bereiche == len(erwartet), (
+        f"Die Seitenleiste hat {bereiche} Bereiche, erwartet werden {len(erwartet)}."
+    )
+    for nummer, (_schluessel, titel, _kuerzel) in enumerate(BEREICHE):
+        assert titel == erwartet[nummer], (
+            f"Auf Platz {nummer + 1} steht „{titel}“, erwartet wird "
+            f"„{erwartet[nummer]}“."
+        )
 
 
 def test_jeder_aufruf_auf_dem_fenster_gibt_es_auch() -> None:

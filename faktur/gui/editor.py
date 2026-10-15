@@ -17,6 +17,7 @@ genau die Wege, die man nicht braucht.
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 from faktur import betraege, dateien, db, pdf, suchen
 from faktur.gui.positionen import PositionenModell
@@ -24,6 +25,7 @@ from faktur.gui.qt import (
     QAbstractItemView,
     QComboBox,
     QDialog,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -33,6 +35,7 @@ from faktur.gui.qt import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSettings,
     Qt,
     QTableView,
     QVBoxLayout,
@@ -249,6 +252,11 @@ class EditorFenster(QMainWindow):
         super().__init__()
         self.db = db
         self.dokument_id = dokument_id
+
+        # Dasselbe Verzeichnis wie das Hauptfenster, damit beide sich
+        # dieselben Einstellungen teilen und nicht gegenseitig
+        # ueberschreiben.
+        self._einstellungen = QSettings("New Air Media Group", "Faktur")
         self.angebots_id = angebots_id
         self.positionen = PositionenModell(preise_genau=angebots_id is None)
 
@@ -264,6 +272,7 @@ class EditorFenster(QMainWindow):
         anordnung.addLayout(self._fuss())
 
         self.setCentralWidget(zentrale)
+        self.statusBar().showMessage("Bereit")
         self._fuellen()
 
     # --------------------------------------------------------------- kopf
@@ -398,14 +407,17 @@ class EditorFenster(QMainWindow):
         anordnung.addWidget(self.summe_label)
         anordnung.addStretch(1)
 
-        anordnung.addWidget(self._knopf("Speichern", lambda: self.speichern(False)))
+        self.zeile_ordner = QLabel()
+        self.zeile_ordner.setObjectName("zweit")
+
+        anordnung.addWidget(self.zeile_ordner)
+
+        anordnung.addWidget(self._knopf("Speichern", self.speichern))
         # Das doppelte & ist ein echtes: Qt liest ein einfaches als
         # Tastenkuerzel und wuerde aus "& PDF" ein "_PDF" machen.
-        speichern_und_pdf = self._knopf(
-            "Speichern && PDF", lambda: self.speichern(True)
-        )
-        speichern_und_pdf.setObjectName("haupt")
-        anordnung.addWidget(speichern_und_pdf)
+        pdf_erzeugen = self._knopf("PDF erzeugen && …", self.pdf_erzeugen)
+        pdf_erzeugen.setObjectName("haupt")
+        anordnung.addWidget(pdf_erzeugen)
         return anordnung
 
     # -------------------------------------------------------------- fuellen
@@ -641,11 +653,26 @@ class EditorFenster(QMainWindow):
 
     # ------------------------------------------------------------ aktionen
 
-    def speichern(self, mit_pdf: bool = False) -> bool:
-        """Speichert das Dokument, und schreibt auf Wunsch die PDF.
+    def melde(self, text: str) -> None:
+        """Schreibt einen Satz in die Statuszeile dieses Fensters.
+
+        Das Dokumentfenster hat seine eigene Leiste unten. Es könnte sich
+        beim Hauptfenster melden — aber das kann auch geschlossen sein,
+        während dieses Fenster offen bleibt.
 
         Args:
-            mit_pdf: Ob danach die PDF geschrieben werden soll.
+            text: Was geschehen ist.
+
+        Returns:
+            Nichts.
+        """
+        self.statusBar().showMessage(text)
+
+    def speichern(self) -> bool:
+        """Speichert das Dokument. Sonst nichts.
+
+        Keine Frage, kein Fenster, kein Ordner. Wer nur speichern will,
+        muss sich dafür nichts gefallen lassen.
 
         Returns:
             ``True``, wenn gespeichert wurde.
@@ -655,70 +682,91 @@ class EditorFenster(QMainWindow):
             QMessageBox.warning(self, "Nicht gespeichert", frage)
             return False
 
-        if mit_pdf and self._frage_ueberschreiben():
-            return False
-
         kennung = dateien.dokument_speichern(
             self.db, self.kopf(), self.positionen.liste()
         )
-        if self.dokument_id is None:
-            self.dokument_id = kennung
-        else:
-            self.dokument_id = int(self.dokument_id)
-
-        if mit_pdf:
-            self._pdf_schreiben()
+        self.dokument_id = (
+            kennung if self.dokument_id is None else int(self.dokument_id)
+        )
 
         self.setWindowTitle(self._titel())
+        self.melde("Gespeichert.")
+        self.zeile_ordner.setText("")
         return True
 
-    def _frage_ueberschreiben(self) -> bool:
-        """Fragt, wenn die PDF schon da ist.
+    def pdf_erzeugen(self) -> bool:
+        """Speichert das Dokument und fragt dann, wohin die PDF soll.
+
+        **Erst speichern, dann fragen.** Sonst käme die PDF mit dem Stand
+        von vor dem letzten Tippen heraus — ein Fehler, den man erst auf
+        dem Papier merkt.
 
         Returns:
-            ``True``, wenn abgebrochen wurde.
+            ``True``, wenn die PDF geschrieben wurde.
         """
+        if not self.speichern():
+            return False
+
         dokument = dateien.dokument_holen(self.db, int(self.dokument_id or 0))
         if dokument is None:
             return False
 
-        ordner = db.ausgabeordner()
-        ziel = ordner / f"{dateien.dateiname(dokument, str(dokument['art']))}.pdf"
-        if not ziel.is_file():
+        vorschlag = f"{dateien.dateiname(dokument, str(dokument['art']))}.pdf"
+        ziel, _gefiltert = QFileDialog.getSaveFileName(
+            self,
+            "PDF speichern unter",
+            str(self._ordner_vorschlag() / vorschlag),
+            "PDF (*.pdf)",
+        )
+        if not ziel:
+            # Abgebrochen. Der Beleg ist gespeichert, es gibt nur keine PDF.
+            self.melde("Gespeichert, aber keine PDF geschrieben.")
             return False
 
-        antwort = QMessageBox.question(
-            self,
-            "PDF gibt es schon",
-            f"„{ziel.name}“ liegt schon im Ordner.\n\nSoll sie überschrieben werden?",
-            QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes,
-            QMessageBox.StandardButton.Cancel,
-        )
-        return antwort != QMessageBox.StandardButton.Yes
+        pfad = Path(ziel)
+        if pfad.suffix.lower() != ".pdf":
+            pfad = pfad.with_suffix(".pdf")
 
-    def _pdf_schreiben(self) -> None:
-        """Schreibt die PDF des Dokuments.
+        try:
+            pdf.erzeugen(self.db, dokument, pfad)
+        except Exception as fehler:  # noqa: BLE001
+            QMessageBox.critical(
+                self,
+                "PDF",
+                f"Die PDF konnte nicht geschrieben werden:\n\n{fehler}",
+            )
+            return False
+
+        self._ordner_merken(pfad.parent)
+        self.zeile_ordner.setText(f"Geschrieben: {pfad}")
+        self.melde(f"PDF geschrieben: {pfad.name}")
+        return True
+
+    def _ordner_vorschlag(self) -> Path:
+        """Sagt, wo der Ordner zuletzt war.
+
+        Beim ersten Mal der eigene Ordner des Programms. Er wird nicht
+        mehr beschrieben, aber er ist ein vernünftiger Anfang, weil er
+        schon existiert.
+
+        Returns:
+            Der Ordner, in dem der Dialog aufgeht.
+        """
+        gemerkt = self._einstellungen.value("pdf/ordner")
+        if isinstance(gemerkt, str) and Path(gemerkt).is_dir():
+            return Path(gemerkt)
+        return db.ausgabeordner()
+
+    def _ordner_merken(self, ordner: Path) -> None:
+        """Merkt sich den Ordner für das nächste Mal.
+
+        Args:
+            ordner: Der Ordner, in den geschrieben wurde.
 
         Returns:
             Nichts.
         """
-        dokument = dateien.dokument_holen(self.db, int(self.dokument_id or 0))
-        if dokument is None:
-            return
-        ziel = (
-            db.ausgabeordner()
-            / f"{dateien.dateiname(dokument, str(dokument['art']))}.pdf"
-        )
-        try:
-            pdf.erzeugen(self.db, dokument, ziel)
-        except Exception as fehler:  # noqa: BLE001
-            QMessageBox.critical(
-                self, "PDF", f"Die PDF konnte nicht geschrieben werden:\n\n{fehler}"
-            )
-            return
-        QMessageBox.information(
-            self, "PDF geschrieben", f"Die Rechnung liegt hier:\n\n{ziel}"
-        )
+        self._einstellungen.setValue("pdf/ordner", str(ordner))
 
     def aus_angebot(self, dokument_id: int) -> bool:
         """Legt aus einem Angebot eine Rechnung an.

@@ -40,18 +40,25 @@ SELBST = (
 def _abdruck(ordner: Path) -> dict[str, str]:
     """Bildet einen Ordner als Namen und Prüfsummen ab.
 
+    **Rekursiv, mit dem Weg als Namen.** Bis hierher wurden nur die
+    Dateien direkt unter ``daten/`` gesehen. Der Ordner ``daten/Dokumente``
+    stand damit unter keiner Aufsicht — und dorthin haben fuenf Tests
+    waehrend eines Laufs ihre PDF geschrieben, ohne dass jemand etwas
+    bemerkt hat. Genau die Dateien, die auf der Festplatte des Benutzers
+    niemand braucht.
+
     Args:
-        ordner: Der Ordner, nicht rekursiv.
+        ordner: Der Ordner.
 
     Returns:
-        Der Name der Datei und ihre Prüfsumme.
+        Der Weg der Datei, von :data:`DATEN` aus, und ihre Prüfsumme.
     """
     if not ordner.is_dir():
         return {}
 
     return {
-        pfad.name: hashlib.sha256(pfad.read_bytes()).hexdigest()
-        for pfad in sorted(ordner.iterdir())
+        str(pfad.relative_to(ordner)): hashlib.sha256(pfad.read_bytes()).hexdigest()
+        for pfad in sorted(ordner.rglob("*"))
         if pfad.is_file()
     }
 

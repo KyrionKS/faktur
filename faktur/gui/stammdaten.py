@@ -17,11 +17,10 @@ import sqlite3
 from faktur import einstellungen, gestaltung
 from faktur.gui.qt import (
     QComboBox,
-    QDialog,
-    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -32,6 +31,7 @@ from faktur.gui.qt import (
     QVBoxLayout,
     QWidget,
 )
+from faktur.gui.seite import Seite
 
 #: Die Felder der Firma. Schlüssel, Beschriftung, Zeile, Spalte.
 _FIRMA: tuple[tuple[str, str, int, int], ...] = (
@@ -67,8 +67,19 @@ _BRIEFTE: tuple[tuple[str, str], ...] = (
 _GROESSEN = {"klein": "Klein", "normal": "Normal", "gross": "Groß"}
 
 
-class StammdatenDialog(QDialog):
-    """Das Blatt mit den Einstellungen.
+class StammdatenSeite(Seite):
+    """Die Seite mit Firma, Bank, Brieftexten und Aussehen.
+
+    **Eine Seite, kein Blatt.** Bis 0.10 lag sie hinter *Einstellungen…*
+    im Menü, und auf dem Mac war sie dort nicht zu finden: Qt schiebt
+    einen Punkt mit der Rolle *Einstellungen* ins Programm-Menü, und das
+    hieß noch *Python*, weil es kein Bündel gab. Man musste also etwas
+    eingeben können und konnte es nicht — und das fiel erst auf, als
+    jemand es benutzen wollte.
+
+    Darum steht sie jetzt in der Seitenleiste, wo sie immer war. Der
+    Menüpunkt bleibt, weil er auf dem Mac hingehört — er ist nur nicht
+    mehr der einzige Weg.
 
     Attributes:
         db: Die Datenbankverbindung.
@@ -76,18 +87,14 @@ class StammdatenDialog(QDialog):
         bausteine: Die Textfelder der Briefe, je Schlüssel.
     """
 
-    def __init__(self, db: sqlite3.Connection, eltern: QWidget | None = None) -> None:
-        """Baut das Blatt auf.
+    def __init__(self, db: sqlite3.Connection) -> None:
+        """Baut die Seite auf.
 
         Args:
             db: Die Datenbankverbindung.
-            eltern: Das Fenster, zu dem das Blatt gehört.
         """
-        super().__init__(eltern)
-        self.db = db
-        self.setWindowTitle("Einstellungen")
-        self.setModal(True)
-        self.resize(720, 560)
+        super().__init__(db, "Stammdaten")
+        self.ohne_suche()
 
         self.felder: dict[str, QLineEdit] = {}
         self.bausteine: dict[str, QTextEdit] = {}
@@ -98,20 +105,16 @@ class StammdatenDialog(QDialog):
         reiter.addTab(_in_rahmen(self._reiter_briefe()), "Brieftexte")
         reiter.addTab(_in_rahmen(self._reiter_aussehen()), "Aussehen")
 
-        knoepfe = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save
-            | QDialogButtonBox.StandardButton.Cancel
-        )
-        knoepfe.button(QDialogButtonBox.StandardButton.Save).setText("Speichern")
-        knoepfe.button(QDialogButtonBox.StandardButton.Cancel).setText("Abbrechen")
-        knoepfe.accepted.connect(self._speichern)
-        knoepfe.rejected.connect(self.reject)
+        speichern = QPushButton("Speichern")
+        speichern.setObjectName("haupt")
+        speichern.clicked.connect(self.speichern)
 
-        anordnung = QVBoxLayout(self)
-        anordnung.setContentsMargins(16, 16, 16, 16)
-        anordnung.setSpacing(12)
-        anordnung.addWidget(reiter, 1)
-        anordnung.addWidget(knoepfe)
+        leiste = QHBoxLayout()
+        leiste.addStretch(1)
+        leiste.addWidget(speichern)
+
+        self._koerper.addWidget(reiter, 1)
+        self._koerper.addLayout(leiste)
 
         self._fuellen()
 
@@ -259,11 +262,11 @@ class StammdatenDialog(QDialog):
         if pfad:
             self.logo.setText(pfad)
 
-    def _speichern(self) -> None:
+    def speichern(self) -> bool:
         """Schreibt alle Felder in die Datenbank.
 
         Returns:
-            Nichts.
+            ``True``, wenn gespeichert wurde.
         """
         for schluessel, feld in self.felder.items():
             einstellungen.speichere(self.db, schluessel, feld.text().strip())
@@ -279,7 +282,9 @@ class StammdatenDialog(QDialog):
         if pfad:
             self._logo_uebernehmen(pfad)
 
-        self.accept()
+        self.erneut_laden()
+        self.melde("Stammdaten gespeichert.")
+        return True
 
     def _logo_uebernehmen(self, pfad: str) -> None:
         """Kopiert das gewählte Logo an seinen Platz.
@@ -345,4 +350,4 @@ def _rechts() -> object:
     return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
 
 
-__all__ = ["StammdatenDialog"]
+__all__ = ["StammdatenSeite"]

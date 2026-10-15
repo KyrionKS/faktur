@@ -226,11 +226,16 @@ def durchlauf(fenster: Fenster, app: QApplication, protokoll: Protokoll) -> None
 
     # Noch nicht gebaut. Das ist kein Fehler, sondern der Stand.
     for _schluessel, titel, _kuerzel in BEREICHE:
-        if not hasattr(fenster.seiten[_schluessel], "modell"):
-            protokoll.noch_nicht(f"Bereich {titel} hat noch keinen Inhalt")
+        seite = fenster.seiten[_schluessel]
+        if hasattr(seite, "modell"):
+            continue
+        if _schluessel == "stammdaten":
+            _stammdaten_pruefen(fenster, seite, protokoll)
+            continue
+        protokoll.noch_nicht(f"Bereich {titel} hat noch keinen Inhalt")
     _formular_pruefen(fenster, app, protokoll)
     _dokument_pruefen(fenster, app, protokoll)
-    protokoll.noch_nicht("Einstellungen, Export und Übersicht")
+    protokoll.noch_nicht("Export und die Zahlen auf der Übersicht")
 
 
 def _dialoge_stumm() -> None:
@@ -252,6 +257,67 @@ def _dialoge_stumm() -> None:
     QMessageBox.question = staticmethod(  # noqa: E731
         lambda *a, **k: QMessageBox.StandardButton.Cancel
     )
+
+
+def _stammdaten_pruefen(fenster: Fenster, seite: object, protokoll: Protokoll) -> None:
+    """Prueft den Weg von „fehlt" ueber „gefuellt" zurueck zu „da".
+
+    Die Durchlaufdatenbank ist bereits vollstaendig. Genau deshalb wird
+    hier die IBAN erst weggenommen: Sonst waere der Hinweis zu Recht weg,
+    und es gaebe nichts zu pruefen. Ein Test, der die falsche Lage
+    voraussetzt, meldet Erfolg, wenn alles stimmt — und Fehler, wenn
+    alles richtig ist.
+
+    Args:
+        fenster: Das Fenster.
+        seite: Die Stammdatenseite.
+        protokoll: Wohin die Ergebnisse kommen.
+
+    Returns:
+        Nichts.
+    """
+    from faktur import einstellungen
+
+    # ``isHidden()`` und nicht ``isVisible()``: Die Seite steckt nicht
+    # im gerade sichtbaren Stapel, und Qt meldet ein Widget dann als
+    # unsichtbar, egal ob es eingeblendet wurde. Gemessen.
+    uebersicht = fenster.seiten["uebersicht"]
+
+    # 1. Die IBAN weg: Die Uebersicht muss warnen.
+    einstellungen.speichere(fenster.db, "iban", "")
+    uebersicht.beim_zeigen()
+    if not uebersicht.hinweis.isHidden():
+        protokoll.ok("die Uebersicht warnt bei fehlenden Stammdaten")
+    else:
+        protokoll.schlecht("Uebersicht", "sie warnt nicht, obwohl die IBAN fehlt")
+
+    # 2. Von der Seite aus fuellen: Der Hinweis muss verschwinden.
+    gespeicherte = einstellungen.hole(fenster.db, "iban")
+    seite.felder["iban"].setText(gespeicherte or "DE02 1203 0000 0000 2020 51")
+    if not einstellungen.hole(fenster.db, "firma"):
+        seite.felder["firma"].setText("New Air Media Group")
+    seite.speichern()
+
+    if einstellungen.vollstaendig(fenster.db):
+        protokoll.ok("Stammdaten speichern")
+    else:
+        protokoll.schlecht("Stammdaten", "sie wurden nicht gespeichert")
+
+    uebersicht.beim_zeigen()
+    if uebersicht.hinweis.isHidden():
+        protokoll.ok("und der Hinweis verschwindet danach")
+        protokoll.ok("und der Hinweis verschwindet danach")
+    else:
+        protokoll.schlecht("Uebersicht", "der Hinweis bleibt stehen")
+
+    # 3. Und wieder loeschen: Er muss wiederkommen.
+    einstellungen.speichere(fenster.db, "iban", "")
+    uebersicht.beim_zeigen()
+    if not uebersicht.hinweis.isHidden():
+        protokoll.ok("und er kommt wieder, wenn etwas fehlt")
+        protokoll.ok("und er kommt wieder, wenn etwas fehlt")
+    else:
+        protokoll.schlecht("Uebersicht", "der Hinweis kommt nicht wieder")
 
 
 def _dokument_pruefen(
@@ -308,10 +374,7 @@ def _dokument_pruefen(
             protokoll.schlecht("Umstellen", "hat die Summe veraendert")
 
         anzahl = len(dateien.dokumente(verbindung))
-        if (
-            editor.speichern(mit_pdf=False) is False
-            and len(dateien.dokumente(verbindung)) == anzahl
-        ):
+        if editor.speichern() is False and len(dateien.dokumente(verbindung)) == anzahl:
             protokoll.ok("ohne Kunde wird nicht gespeichert")
         else:
             protokoll.schlecht("Editor", "hat ohne Kunde gespeichert")
@@ -320,7 +383,7 @@ def _dokument_pruefen(
         if not _waehle_kunde(editor, "Soundcheck GmbH"):
             protokoll.schlecht("Editor", "Soundcheck GmbH steht nicht in der Auswahl")
             return
-        if editor.speichern(mit_pdf=False):
+        if editor.speichern():
             protokoll.ok("Angebot speichern")
         else:
             protokoll.schlecht("Editor", "das Angebot liess sich nicht speichern")
@@ -361,7 +424,7 @@ def _dokument_pruefen(
             return
         protokoll.ok("Aus dem Angebot wird eine Rechnung mit derselben Nummer")
 
-        if rechnung.speichern(mit_pdf=False):
+        if rechnung.speichern():
             protokoll.ok("und die Rechnung liegt in der Datenbank")
         else:
             protokoll.schlecht("Abrechnen", "die Rechnung liess sich nicht speichern")
